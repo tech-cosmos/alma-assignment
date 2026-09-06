@@ -10,7 +10,7 @@ calls that factory. Implementations must raise on failure; the caller logs and s
 """
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +21,7 @@ class EmailMessage:
     html: str | None = None
 
 
+@runtime_checkable
 class EmailAdapter(Protocol):
     async def send(self, message: EmailMessage) -> None:
         """Deliver one message. Raise on failure."""

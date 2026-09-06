@@ -119,7 +119,7 @@ async def download_resume(
     if url is not None:
         return RedirectResponse(url, status_code=status.HTTP_302_FOUND)
     try:
-        body = storage.stream(lead.resume_key)
+        body = await storage.stream(lead.resume_key)
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Resume file not found") from exc
     safe_name = lead.resume_name.replace('"', "")

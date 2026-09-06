@@ -14,9 +14,10 @@ filesystem path or bucket URL to callers.
 """
 
 from collections.abc import AsyncIterator
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
+@runtime_checkable
 class StorageAdapter(Protocol):
     async def put(self, key: str, data: bytes, content_type: str) -> None:
         """Store ``data`` under ``key``, overwriting any existing object."""
@@ -26,8 +27,9 @@ class StorageAdapter(Protocol):
         """Remove ``key``. Must not raise if the key is missing."""
         ...
 
-    def stream(self, key: str) -> AsyncIterator[bytes]:
-        """Yield the object's bytes in chunks. Raise ``KeyError`` if the key is missing."""
+    async def stream(self, key: str) -> AsyncIterator[bytes]:
+        """Return an iterator over the object's bytes. Raise ``KeyError`` if the key
+        is missing (checked before the iterator is returned, so callers can 404)."""
         ...
 
     async def presigned_url(self, key: str, *, expires_in: int) -> str | None:

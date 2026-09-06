@@ -3,6 +3,10 @@
 import logging
 
 from app.adapters.email.base import EmailAdapter, EmailMessage
+from app.adapters.email.templates import (
+    render_attorney_notification,
+    render_prospect_confirmation,
+)
 from app.core.config import Settings
 from app.schemas.lead import LeadRead
 
@@ -15,29 +19,27 @@ class LeadNotifier:
         self._settings = settings
 
     def prospect_message(self, lead: LeadRead) -> EmailMessage:
+        rendered = render_prospect_confirmation(
+            first_name=lead.first_name, last_name=lead.last_name
+        )
         return EmailMessage(
-            to=lead.email,
-            subject="We received your information",
-            text=(
-                f"Hi {lead.first_name},\n\n"
-                "Thank you for reaching out. We have received your details and resume, "
-                "and an attorney will contact you shortly.\n\n"
-                "Best regards,\nThe Alma team"
-            ),
+            to=lead.email, subject=rendered.subject, text=rendered.text, html=rendered.html
         )
 
     def attorney_message(self, lead: LeadRead) -> EmailMessage:
-        link = f"{self._settings.public_web_url.rstrip('/')}/leads/{lead.id}"
+        rendered = render_attorney_notification(
+            lead_id=str(lead.id),
+            first_name=lead.first_name,
+            last_name=lead.last_name,
+            email=lead.email,
+            resume_name=lead.resume_name,
+            public_web_url=self._settings.public_web_url,
+        )
         return EmailMessage(
             to=self._settings.attorney_email,
-            subject=f"New lead: {lead.first_name} {lead.last_name}",
-            text=(
-                "A new prospect submitted the intake form.\n\n"
-                f"Name: {lead.first_name} {lead.last_name}\n"
-                f"Email: {lead.email}\n"
-                f"Resume: {lead.resume_name}\n\n"
-                f"Review the lead: {link}\n"
-            ),
+            subject=rendered.subject,
+            text=rendered.text,
+            html=rendered.html,
         )
 
     async def notify_new_lead(self, lead: LeadRead) -> None:
