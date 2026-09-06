@@ -4,9 +4,10 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.user import User
 
 
 class LeadState(enum.StrEnum):
@@ -41,3 +42,9 @@ class Lead(Base):
     reached_out_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Eagerly joined so every read (list, get, refresh) can report who reached out.
+    reached_out_by_user: Mapped[User | None] = relationship(User, lazy="joined")
+
+    @property
+    def reached_out_by_email(self) -> str | None:
+        return self.reached_out_by_user.email if self.reached_out_by_user else None

@@ -3,45 +3,64 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
 
-import { type ApiFailure, type Lead, type LeadState, listLeads, logout, markReachedOut, resumeUrl } from "@/lib/api";
-import { formatDateTime, stateLabel } from "@/lib/format";
+import { type ApiFailure, type Lead, type LeadCounts, type LeadState, listLeads, logout, markReachedOut, resumeUrl } from "@/lib/api";
+import { stateLabel } from "@/lib/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/pagination";
+import { RelativeTime } from "@/components/relative-time";
 import { StateBadge } from "@/components/state-badge";
-import { StateFilter } from "@/components/state-filter";
+import { StateTabs } from "@/components/state-tabs";
 import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 100;
+export const PAGE_SIZE = 50;
+const COLUMNS = 7;
 
 type Status =
   | { kind: "loading" }
   | { kind: "error"; error: ApiFailure }
   | { kind: "ready"; leads: Lead[]; total: number };
 
-export function LeadsTable({ state }: { state: LeadState | undefined }) {
+type Props = { state: LeadState | undefined; page: number };
+
+export function LeadsTable({ state, page }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>({ kind: "loading" });
+  // Counts survive a reload so the tabs do not flicker while the table refreshes.
+  const [counts, setCounts] = useState<LeadCounts | null>(null);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const listHref = useCallback(
+    (targetPage: number) => {
+      const params = new URLSearchParams();
+      if (state) params.set("state", state);
+      if (targetPage > 1) params.set("page", String(targetPage));
+      const query = params.toString();
+      return query ? `/leads?${query}` : "/leads";
+    },
+    [state],
+  );
+
   const load = useCallback(async () => {
     setStatus({ kind: "loading" });
-    const result = await listLeads({ state, limit: PAGE_SIZE });
+    const result = await listLeads({ state, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
     if (!result.ok) {
       if (result.error.status === 401) {
         // Stale or missing session: clear the cookie so middleware stops letting us through, then bounce.
         await logout();
-        router.replace(`/login?next=${encodeURIComponent(state ? `/leads?state=${state}` : "/leads")}`);
+        router.replace(`/login?next=${encodeURIComponent(listHref(page))}`);
         return;
       }
       setStatus({ kind: "error", error: result.error });
       return;
     }
+    setCounts(result.data.counts);
     setStatus({ kind: "ready", leads: result.data.items, total: result.data.total });
-  }, [state, router]);
+  }, [state, page, router, listHref]);
 
   useEffect(() => {
     void load();
@@ -63,15 +82,28 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
             }
           : s,
       );
+      setCounts((c) => (c ? { pending: Math.max(0, c.pending - 1), reached_out: c.reached_out + 1 } : c));
       return;
     }
     if (result.error.status === 401) {
       await logout();
-      router.replace("/login?next=/leads");
+      router.replace(`/login?next=${encodeURIComponent(listHref(page))}`);
       return;
     }
     setRowError({ id: lead.id, message: result.error.message });
     if (result.error.status === 409 || result.error.status === 404) void load();
+  }
+
+  function openLead(event: React.MouseEvent<HTMLTableRowElement>, id: string) {
+    // Links and buttons inside the row keep their own behaviour.
+    if ((event.target as HTMLElement).closest("a, button")) return;
+    if (window.getSelection()?.toString()) return; // the user was selecting text
+    const href = `/leads/${id}`;
+    if (event.metaKey || event.ctrlKey) {
+      window.open(href, "_blank", "noopener");
+      return;
+    }
+    router.push(href);
   }
 
   const count = status.kind === "ready" ? status.total : null;
@@ -92,7 +124,7 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <StateFilter value={state} />
+          <StateTabs value={state} counts={counts} />
           <Button variant="outline" size="icon" aria-label="Reload" onClick={() => void load()} disabled={status.kind === "loading"}>
             <RefreshCw className={cn(status.kind === "loading" && "animate-spin")} />
           </Button>
@@ -115,8 +147,7 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <Th>First name</Th>
-              <Th>Last name</Th>
+              <Th>Name</Th>
               <Th>Email</Th>
               <Th>Resume</Th>
               <Th>State</Th>
@@ -129,7 +160,7 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
             {status.kind === "loading" &&
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i} className="hover:bg-transparent">
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: COLUMNS }).map((_, j) => (
                     <TableCell key={j}>
                       <span className="block h-3.5 w-full max-w-28 animate-pulse rounded-sm bg-muted" />
                     </TableCell>
@@ -139,8 +170,19 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
 
             {status.kind === "ready" && status.leads.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
-                  {state ? `No ${stateLabel(state).toLowerCase()} leads.` : "No leads yet. Submissions from the public form appear here."}
+                <TableCell colSpan={COLUMNS} className="h-32 text-center text-muted-foreground">
+                  {page > 1 ? (
+                    <>
+                      Nothing on this page.{" "}
+                      <Link href={listHref(1)} className="underline underline-offset-4">
+                        Back to the first page
+                      </Link>
+                    </>
+                  ) : state ? (
+                    `No ${stateLabel(state).toLowerCase()} leads.`
+                  ) : (
+                    "No leads yet. Submissions from the public form appear here."
+                  )}
                 </TableCell>
               </TableRow>
             )}
@@ -150,57 +192,70 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
                 const done = lead.state === "REACHED_OUT";
                 const busy = busyId === lead.id;
                 return (
-                  <TableRow key={lead.id} className="align-top">
+                  <TableRow
+                    key={lead.id}
+                    className="cursor-pointer align-top focus-within:bg-muted/40"
+                    onClick={(e) => openLead(e, lead.id)}
+                  >
                     <TableCell className="font-medium">
                       <Link href={`/leads/${lead.id}`} className="underline-offset-4 hover:underline">
-                        {lead.first_name}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <Link href={`/leads/${lead.id}`} className="underline-offset-4 hover:underline">
-                        {lead.last_name}
+                        {lead.first_name} {lead.last_name}
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <a href={`mailto:${lead.email}`} className="underline-offset-4 hover:underline">
+                      <a href={`mailto:${lead.email}`} className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
                         {lead.email}
                       </a>
                     </TableCell>
                     <TableCell>
-                      <a
-                        href={resumeUrl(lead.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex max-w-56 items-center gap-1.5 underline-offset-4 hover:underline"
-                        title={`${lead.resume_name} (${lead.resume_type})`}
-                      >
-                        <span className="truncate">{lead.resume_name}</span>
-                        <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
-                      </a>
+                      <span className="inline-flex max-w-56 items-center gap-1">
+                        <Link
+                          href={`/leads/${lead.id}#resume`}
+                          className="truncate underline-offset-4 hover:underline"
+                          title={`Preview ${lead.resume_name}`}
+                        >
+                          {lead.resume_name}
+                        </Link>
+                        <a
+                          href={resumeUrl(lead.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${lead.resume_name} in a new tab`}
+                          title="Open in new tab"
+                          className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </a>
+                      </span>
                     </TableCell>
                     <TableCell>
                       <StateBadge state={lead.state} />
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(lead.created_at)}</TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {lead.reached_out_at ? formatDateTime(lead.reached_out_at) : <span aria-label="not yet">—</span>}
+                      <RelativeTime iso={lead.created_at} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {lead.reached_out_at ? (
+                        <span className="flex flex-col gap-0.5">
+                          <RelativeTime iso={lead.reached_out_at} />
+                          {lead.reached_out_by_email && (
+                            <span className="text-xs" title={lead.reached_out_by_email}>
+                              by <span className="text-foreground/80">{lead.reached_out_by_email}</span>
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span aria-label="not yet">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex flex-col items-end gap-1">
-                        <Button
-                          size="sm"
-                          variant={done ? "secondary" : "default"}
-                          disabled={done || busy}
-                          aria-disabled={done}
-                          onClick={() => void reachOut(lead)}
-                        >
-                          {busy ? (
-                            <Loader2 className="animate-spin" data-icon="inline-start" />
-                          ) : done ? (
-                            <Check data-icon="inline-start" />
-                          ) : null}
-                          {done ? "Reached out" : "Mark reached out"}
-                        </Button>
+                        {!done && (
+                          <Button size="sm" disabled={busy} onClick={() => void reachOut(lead)}>
+                            {busy && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                            Mark reached out
+                          </Button>
+                        )}
                         {rowError?.id === lead.id && (
                           <span role="alert" className="max-w-52 text-right text-xs text-destructive">
                             {rowError.message}
@@ -214,6 +269,8 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
           </TableBody>
         </Table>
       </div>
+
+      {status.kind === "ready" && <Pagination page={page} pageSize={PAGE_SIZE} total={status.total} hrefFor={listHref} />}
     </div>
   );
 }

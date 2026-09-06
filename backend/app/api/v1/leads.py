@@ -16,7 +16,15 @@ from pydantic import EmailStr, ValidationError
 from app.api.deps import CurrentUser, EmailDep, SessionDep, SettingsDep, StorageDep
 from app.models.lead import Lead, LeadState
 from app.repositories.lead import LeadRepository
-from app.schemas.lead import LeadCreate, LeadList, LeadRead, LeadStateUpdate
+from app.schemas.lead import (
+    LeadCounts,
+    LeadCreate,
+    LeadDetail,
+    LeadEventRead,
+    LeadList,
+    LeadRead,
+    LeadStateUpdate,
+)
 from app.services.lead import InvalidTransition, LeadService
 from app.services.notify import LeadNotifier
 from app.services.resume import InvalidResume, validate_resume
@@ -75,18 +83,29 @@ async def list_leads(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> LeadList:
-    items, total = await LeadRepository(session).list(state=state, limit=limit, offset=offset)
+    repo = LeadRepository(session)
+    items, total = await repo.list(state=state, limit=limit, offset=offset)
+    counts = await repo.count_by_state()
     return LeadList(
         items=[LeadRead.model_validate(lead) for lead in items],
         total=total,
         limit=limit,
         offset=offset,
+        counts=LeadCounts(
+            pending=counts[LeadState.PENDING], reached_out=counts[LeadState.REACHED_OUT]
+        ),
     )
 
 
-@router.get("/{lead_id}", response_model=LeadRead)
-async def get_lead(_: CurrentUser, session: SessionDep, lead_id: uuid.UUID) -> LeadRead:
-    return LeadRead.model_validate(await _get_lead_or_404(session, lead_id))
+@router.get("/{lead_id}", response_model=LeadDetail)
+async def get_lead(_: CurrentUser, session: SessionDep, lead_id: uuid.UUID) -> LeadDetail:
+    """One lead plus its full history (oldest event first)."""
+    lead = await _get_lead_or_404(session, lead_id)
+    events = await LeadRepository(session).list_events(lead.id)
+    return LeadDetail(
+        **LeadRead.model_validate(lead).model_dump(),
+        events=[LeadEventRead.model_validate(e) for e in events],
+    )
 
 
 @router.patch("/{lead_id}/state", response_model=LeadRead)
@@ -113,7 +132,9 @@ async def download_resume(
     storage: StorageDep,
     settings: SettingsDep,
     lead_id: uuid.UUID,
+    download: Annotated[bool, Query(description="Force a save dialog instead of inline")] = False,
 ) -> RedirectResponse | StreamingResponse:
+    """Serve the resume inline (so PDFs render in the browser) or as an attachment."""
     lead = await _get_lead_or_404(session, lead_id)
     url = await storage.presigned_url(lead.resume_key, expires_in=settings.resume_url_ttl_seconds)
     if url is not None:
@@ -123,8 +144,9 @@ async def download_resume(
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Resume file not found") from exc
     safe_name = lead.resume_name.replace('"', "")
+    disposition = "attachment" if download else "inline"
     return StreamingResponse(
         body,
         media_type=lead.resume_type,
-        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{safe_name}"'},
     )

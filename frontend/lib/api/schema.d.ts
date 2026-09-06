@@ -97,7 +97,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Lead */
+        /**
+         * Get Lead
+         * @description One lead plus its full history (oldest event first).
+         */
         get: operations["get_lead_api_v1_leads__lead_id__get"];
         put?: never;
         post?: never;
@@ -131,7 +134,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Download Resume */
+        /**
+         * Download Resume
+         * @description Serve the resume inline (so PDFs render in the browser) or as an attachment.
+         */
         get: operations["download_resume_api_v1_leads__lead_id__resume_get"];
         put?: never;
         post?: never;
@@ -164,6 +170,72 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** LeadCounts */
+        LeadCounts: {
+            /** Pending */
+            pending: number;
+            /** Reached Out */
+            reached_out: number;
+        };
+        /** LeadDetail */
+        LeadDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Email */
+            email: string;
+            /** Resume Name */
+            resume_name: string;
+            /** Resume Type */
+            resume_type: string;
+            state: components["schemas"]["LeadState"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Reached Out At */
+            reached_out_at: string | null;
+            /** Reached Out By */
+            reached_out_by: string | null;
+            /** Reached Out By Email */
+            reached_out_by_email?: string | null;
+            /** Events */
+            events: components["schemas"]["LeadEventRead"][];
+        };
+        /**
+         * LeadEventRead
+         * @description One entry in a lead's history. ``actor_*`` are null for the prospect's submission.
+         */
+        LeadEventRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            from_state: components["schemas"]["LeadState"] | null;
+            to_state: components["schemas"]["LeadState"];
+            /** Actor Id */
+            actor_id: string | null;
+            /** Actor Email */
+            actor_email: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** LeadList */
         LeadList: {
             /** Items */
@@ -174,6 +246,7 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+            counts: components["schemas"]["LeadCounts"];
         };
         /** LeadRead */
         LeadRead: {
@@ -207,6 +280,8 @@ export interface components {
             reached_out_at: string | null;
             /** Reached Out By */
             reached_out_by: string | null;
+            /** Reached Out By Email */
+            reached_out_by_email?: string | null;
         };
         /**
          * LeadState
@@ -435,7 +510,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LeadRead"];
+                    "application/json": components["schemas"]["LeadDetail"];
                 };
             };
             /** @description Validation Error */
@@ -486,7 +561,10 @@ export interface operations {
     };
     download_resume_api_v1_leads__lead_id__resume_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Force a save dialog instead of inline */
+                download?: boolean;
+            };
             header?: never;
             path: {
                 lead_id: string;

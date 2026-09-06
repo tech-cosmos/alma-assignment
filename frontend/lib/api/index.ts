@@ -3,6 +3,9 @@ import { type ApiResult, networkFailure, toFailure } from "./errors";
 import type { components, operations } from "./schema";
 
 export type Lead = components["schemas"]["LeadRead"];
+export type LeadDetail = components["schemas"]["LeadDetail"];
+export type LeadEvent = components["schemas"]["LeadEventRead"];
+export type LeadCounts = components["schemas"]["LeadCounts"];
 export type LeadState = components["schemas"]["LeadState"];
 export type LeadList = components["schemas"]["LeadList"];
 export type User = components["schemas"]["UserRead"];
@@ -58,13 +61,20 @@ export async function listLeads(params: { state?: LeadState; limit?: number; off
   const raw: unknown = result.data;
   if (Array.isArray(raw)) {
     const items = raw as Lead[];
-    return { ok: true, data: { items, total: items.length, limit: params.limit ?? items.length, offset: params.offset ?? 0 } };
+    const counts: LeadCounts = {
+      pending: items.filter((l) => l.state === "PENDING").length,
+      reached_out: items.filter((l) => l.state === "REACHED_OUT").length,
+    };
+    return {
+      ok: true,
+      data: { items, total: items.length, limit: params.limit ?? items.length, offset: params.offset ?? 0, counts },
+    };
   }
   return result;
 }
 
-/** GET /api/v1/leads/{id} */
-export function getLead(id: string): Promise<ApiResult<Lead>> {
+/** GET /api/v1/leads/{id} — the lead plus its history, oldest event first. */
+export function getLead(id: string): Promise<ApiResult<LeadDetail>> {
   return run(() => client.GET("/api/v1/leads/{lead_id}", { params: { path: { lead_id: id } } }));
 }
 
@@ -81,6 +91,11 @@ export function markReachedOut(id: string): Promise<ApiResult<Lead>> {
 /** POST /api/v1/auth/login — the API sets the httpOnly cookie itself. */
 export function login(email: string, password: string): Promise<ApiResult<User>> {
   return run(() => client.POST("/api/v1/auth/login", { body: { email, password } }));
+}
+
+/** GET /api/v1/auth/me — the signed-in attorney. */
+export function me(): Promise<ApiResult<User>> {
+  return run(() => client.GET("/api/v1/auth/me"));
 }
 
 /** POST /api/v1/auth/logout */

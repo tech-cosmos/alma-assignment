@@ -76,7 +76,7 @@ async def engine(settings: Settings) -> AsyncIterator[AsyncEngine]:
 async def clean_tables(engine: AsyncEngine) -> AsyncIterator[None]:
     yield
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE TABLE leads, users"))
+        await conn.execute(text("TRUNCATE TABLE lead_events, leads, users"))
 
 
 @pytest.fixture

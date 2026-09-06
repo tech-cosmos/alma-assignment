@@ -15,7 +15,11 @@ export const client = createClient<paths>({
   ...(API_MOCK ? { fetch: mockFetch } : {}),
 });
 
-/** Direct link to the resume endpoint; the browser sends the auth cookie on navigation. */
-export function resumeUrl(leadId: string): string {
-  return `${API_URL}/api/v1/leads/${encodeURIComponent(leadId)}/resume`;
+/**
+ * Direct link to the resume endpoint; the browser sends the auth cookie on navigation.
+ * By default the file is served inline (PDFs render in the browser); `download` forces a save.
+ */
+export function resumeUrl(leadId: string, options: { download?: boolean } = {}): string {
+  const base = `${API_URL}/api/v1/leads/${encodeURIComponent(leadId)}/resume`;
+  return options.download ? `${base}?download=true` : base;
 }

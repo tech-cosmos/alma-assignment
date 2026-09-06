@@ -23,6 +23,7 @@ async def test_create_lead_persists_uploads_and_emails(
     assert body["resume_type"] == "application/pdf"
     assert body["reached_out_at"] is None
     assert body["reached_out_by"] is None
+    assert body["reached_out_by_email"] is None
     assert "resume_key" not in body
 
     # resume stored under an opaque key
@@ -130,6 +131,7 @@ async def test_list_with_auth_returns_leads(auth_client: httpx.AsyncClient) -> N
     body = resp.json()
     assert body["total"] == 2
     assert body["limit"] == 50 and body["offset"] == 0
+    assert body["counts"] == {"pending": 2, "reached_out": 0}
     assert {item["email"] for item in body["items"]} == {"one@example.com", "two@example.com"}
     assert all(
         set(item) >= {"first_name", "last_name", "email", "resume_name"} for item in body["items"]
@@ -148,6 +150,8 @@ async def test_list_filters_by_state(auth_client: httpx.AsyncClient) -> None:
     reached = (await auth_client.get("/api/v1/leads", params={"state": "REACHED_OUT"})).json()
     assert pending["total"] == 1 and pending["items"][0]["email"] == "other@example.com"
     assert reached["total"] == 1 and reached["items"][0]["id"] == created["id"]
+    # counts are global, not filtered
+    assert pending["counts"] == reached["counts"] == {"pending": 1, "reached_out": 1}
     assert (await auth_client.get("/api/v1/leads", params={"state": "BOGUS"})).status_code == 422
 
 
@@ -155,6 +159,12 @@ async def test_get_lead(auth_client: httpx.AsyncClient) -> None:
     created = (await create_lead(auth_client)).json()
     resp = await auth_client.get(f"/api/v1/leads/{created['id']}")
     assert resp.status_code == 200 and resp.json()["id"] == created["id"]
+    # the submission itself is the first history entry, with no actor
+    events = resp.json()["events"]
+    assert len(events) == 1
+    assert events[0]["from_state"] is None and events[0]["to_state"] == "PENDING"
+    assert events[0]["actor_id"] is None and events[0]["actor_email"] is None
+    assert events[0]["created_at"] == created["created_at"]
     assert (await auth_client.get(f"/api/v1/leads/{uuid.uuid4()}")).status_code == 404
 
 
@@ -170,10 +180,24 @@ async def test_valid_transition_sets_reached_out_fields(auth_client: httpx.Async
     assert body["state"] == LeadState.REACHED_OUT.value
     assert body["reached_out_at"] is not None
     assert body["reached_out_by"] == me["id"]
+    assert body["reached_out_by_email"] == ATTORNEY_EMAIL
 
-    again = await auth_client.get(f"/api/v1/leads/{created['id']}")
-    assert again.json()["state"] == "REACHED_OUT"
-    assert again.json()["reached_out_at"] == body["reached_out_at"]
+    again = (await auth_client.get(f"/api/v1/leads/{created['id']}")).json()
+    assert again["state"] == "REACHED_OUT"
+    assert again["reached_out_at"] == body["reached_out_at"]
+    assert again["reached_out_by_email"] == ATTORNEY_EMAIL
+    # history records who moved it, oldest first
+    assert [(e["from_state"], e["to_state"]) for e in again["events"]] == [
+        (None, "PENDING"),
+        ("PENDING", "REACHED_OUT"),
+    ]
+    moved = again["events"][1]
+    assert moved["actor_id"] == me["id"] and moved["actor_email"] == ATTORNEY_EMAIL
+    assert moved["created_at"] == body["reached_out_at"]
+
+    # the list view carries the actor email too
+    listing = (await auth_client.get("/api/v1/leads")).json()
+    assert listing["items"][0]["reached_out_by_email"] == ATTORNEY_EMAIL
 
 
 async def test_invalid_transitions_return_409(auth_client: httpx.AsyncClient) -> None:
@@ -210,7 +234,11 @@ async def test_resume_streams_from_local_storage(auth_client: httpx.AsyncClient)
     resp = await auth_client.get(f"/api/v1/leads/{created['id']}/resume")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
-    assert 'filename="resume.pdf"' in resp.headers["content-disposition"]
+    assert resp.headers["content-disposition"] == 'inline; filename="resume.pdf"'
+    assert resp.content == PDF_BYTES
+
+    resp = await auth_client.get(f"/api/v1/leads/{created['id']}/resume", params={"download": 1})
+    assert resp.headers["content-disposition"] == 'attachment; filename="resume.pdf"'
     assert resp.content == PDF_BYTES
 
 

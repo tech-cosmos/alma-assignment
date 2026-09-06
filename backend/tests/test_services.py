@@ -36,6 +36,14 @@ async def test_mark_reached_out_transition(db_session: AsyncSession, attorney: U
     assert updated.state is LeadState.REACHED_OUT
     assert updated.reached_out_at is not None
     assert updated.reached_out_by == attorney.id
+    assert updated.reached_out_by_email == attorney.email
+
+    events = await repo.list_events(lead.id)
+    assert [(e.from_state, e.to_state) for e in events] == [
+        (LeadState.PENDING, LeadState.REACHED_OUT)
+    ]
+    assert events[0].actor_id == attorney.id and events[0].actor_email == attorney.email
+    assert events[0].created_at == updated.reached_out_at
 
     with pytest.raises(InvalidTransition):
         await service.mark_reached_out(lead, attorney)

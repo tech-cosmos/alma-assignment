@@ -79,6 +79,8 @@ Layering rules, enforced by convention and review:
 ```mermaid
 erDiagram
     USERS ||--o{ LEADS : "reached_out_by"
+    LEADS ||--o{ LEAD_EVENTS : "history"
+    USERS ||--o{ LEAD_EVENTS : "actor_id"
     USERS {
         uuid id PK
         text email UK
@@ -99,12 +101,22 @@ erDiagram
         timestamptz reached_out_at "null until transition"
         uuid reached_out_by FK "null until transition"
     }
+    LEAD_EVENTS {
+        uuid id PK
+        uuid lead_id FK
+        lead_state from_state "null for the submission"
+        lead_state to_state
+        uuid actor_id FK "null for the submission"
+        text actor_email "snapshot"
+        timestamptz created_at
+    }
 ```
 
 Notes:
 
 - `resume_key` is an opaque key resolved by the storage adapter. The database never contains a filesystem path or URL, so switching storage backends does not touch the data.
-- `reached_out_at` and `reached_out_by` give an audit trail for the one transition the system has. Adding more states later would push this into a separate `lead_events` table; with one transition, two columns are enough.
+- `reached_out_at` and `reached_out_by` are the quick-lookup columns for the list view (the API joins the user to add `reached_out_by_email`).
+- `lead_events` is the append-only history behind the timeline on the lead page: one row per state change (`from_state` is null for the submission itself), written in the same transaction as the lead row. `actor_email` is snapshotted so history stays readable if a user is later removed. Migration `0002` backfills it from the existing leads.
 - Alembic owns the schema. The enum is a Postgres enum type created in the first migration.
 
 ## 4. Lead state machine
@@ -116,7 +128,7 @@ stateDiagram-v2
     REACHED_OUT --> [*]
 ```
 
-There is exactly one transition. `LeadService.mark_reached_out` checks the current state, sets `state`, `reached_out_at` and `reached_out_by`, and commits. Any other request, including `REACHED_OUT -> REACHED_OUT` and `REACHED_OUT -> PENDING`, raises `InvalidTransition`, which the API maps to 409 Conflict. Putting this in one method means the rule is tested once and cannot drift between the API and the UI.
+There is exactly one transition. `LeadService.mark_reached_out` checks the current state, sets `state`, `reached_out_at` and `reached_out_by`, appends a `lead_events` row naming the attorney, and commits. Any other request, including `REACHED_OUT -> REACHED_OUT` and `REACHED_OUT -> PENDING`, raises `InvalidTransition`, which the API maps to 409 Conflict. Putting this in one method means the rule is tested once and cannot drift between the API and the UI.
 
 ## 5. Adapters and local-first defaults
 

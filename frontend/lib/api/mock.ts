@@ -1,8 +1,8 @@
 /**
  * In-memory stand-in for the FastAPI service, enabled with NEXT_PUBLIC_API_MOCK=true.
  * It implements the contract in docs/PLAN.md section 5 closely enough to drive every
- * screen: multipart lead creation, listing with a state filter, the single legal state
- * transition (409 otherwise), and cookie-based login/logout.
+ * screen: multipart lead creation, listing with a state filter and counts, the single legal
+ * state transition (409 otherwise) with a history entry, and cookie-based login/logout.
  *
  * Login: attorney@example.com / password123 (matches the seeded user in section 6).
  * The auth cookie is set with document.cookie (not httpOnly) so middleware.ts sees it.
@@ -10,12 +10,16 @@
 import type { components } from "./schema";
 
 type Lead = components["schemas"]["LeadRead"];
+type LeadDetail = components["schemas"]["LeadDetail"];
+type LeadEvent = components["schemas"]["LeadEventRead"];
 type LeadState = components["schemas"]["LeadState"];
 
 const COOKIE = "access_token";
 const USER = { id: "6b1c2f3e-0000-4000-8000-000000000001", email: "attorney@example.com", created_at: "2026-09-01T09:00:00Z" };
 const PASSWORD = "password123";
 const LATENCY_MS = 350;
+
+const events = new Map<string, LeadEvent[]>();
 
 const seed: Lead[] = [
   lead("Priya", "Natarajan", "priya.natarajan@example.com", "priya-natarajan-cv.pdf", "application/pdf", "2026-09-05T14:12:00Z", "REACHED_OUT"),
@@ -27,8 +31,15 @@ const seed: Lead[] = [
 let leads: Lead[] = [...seed];
 
 function lead(first: string, last: string, email: string, name: string, type: string, created: string, state: LeadState = "PENDING"): Lead {
+  const id = crypto.randomUUID();
+  const reached = state === "REACHED_OUT";
+  // Seeded reached-out leads were moved a couple of hours after submission.
+  const reachedAt = reached ? new Date(new Date(created).getTime() + 2 * 60 * 60 * 1000).toISOString() : null;
+  const history: LeadEvent[] = [event(null, "PENDING", null, created)];
+  if (reachedAt) history.push(event("PENDING", "REACHED_OUT", USER, reachedAt));
+  events.set(id, history);
   return {
-    id: crypto.randomUUID(),
+    id,
     first_name: first,
     last_name: last,
     email,
@@ -36,10 +47,15 @@ function lead(first: string, last: string, email: string, name: string, type: st
     resume_type: type,
     state,
     created_at: created,
-    updated_at: created,
-    reached_out_at: state === "REACHED_OUT" ? created : null,
-    reached_out_by: state === "REACHED_OUT" ? USER.id : null,
+    updated_at: reachedAt ?? created,
+    reached_out_at: reachedAt,
+    reached_out_by: reached ? USER.id : null,
+    reached_out_by_email: reached ? USER.email : null,
   };
+}
+
+function event(from: LeadState | null, to: LeadState, actor: typeof USER | null, at: string): LeadEvent {
+  return { id: crypto.randomUUID(), from_state: from, to_state: to, actor_id: actor?.id ?? null, actor_email: actor?.email ?? null, created_at: at };
 }
 
 function hasCookie(): boolean {
@@ -87,6 +103,10 @@ export async function mockFetch(input: Request): Promise<Response> {
     return new Response(null, { status: 204 });
   }
 
+  if (method === "GET" && path === "/api/v1/auth/me") {
+    return hasCookie() ? json(200, USER) : unauthorized();
+  }
+
   if (method === "POST" && path === "/api/v1/leads") {
     const fd = await input.formData();
     const errors: Array<[string, string]> = [];
@@ -122,7 +142,11 @@ export async function mockFetch(input: Request): Promise<Response> {
       const filtered = leads
         .filter((l) => !state || l.state === state)
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
-      return json(200, { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset });
+      const counts = {
+        pending: leads.filter((l) => l.state === "PENDING").length,
+        reached_out: leads.filter((l) => l.state === "REACHED_OUT").length,
+      };
+      return json(200, { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset, counts });
     }
 
     const single = path.match(/^\/api\/v1\/leads\/([^/]+)(\/state|\/resume)?$/);
@@ -130,11 +154,15 @@ export async function mockFetch(input: Request): Promise<Response> {
       const target = leads.find((l) => l.id === single[1]);
       if (!target) return detail(404, "Lead not found");
       const sub = single[2];
-      if (!sub && method === "GET") return json(200, target);
+      if (!sub && method === "GET") {
+        const body: LeadDetail = { ...target, events: events.get(target.id) ?? [] };
+        return json(200, body);
+      }
       if (sub === "/resume" && method === "GET") {
+        const disposition = url.searchParams.get("download") === "true" ? "attachment" : "inline";
         return new Response(`Mock resume for ${target.first_name} ${target.last_name}\n`, {
           status: 200,
-          headers: { "Content-Type": "text/plain", "Content-Disposition": `inline; filename="${target.resume_name}"` },
+          headers: { "Content-Type": "text/plain", "Content-Disposition": `${disposition}; filename="${target.resume_name}"` },
         });
       }
       if (sub === "/state" && method === "PATCH") {
@@ -144,8 +172,16 @@ export async function mockFetch(input: Request): Promise<Response> {
         }
         if (target.state !== "PENDING") return detail(409, "Lead is already marked as reached out");
         const now = new Date().toISOString();
-        const updated: Lead = { ...target, state: "REACHED_OUT", updated_at: now, reached_out_at: now, reached_out_by: USER.id };
+        const updated: Lead = {
+          ...target,
+          state: "REACHED_OUT",
+          updated_at: now,
+          reached_out_at: now,
+          reached_out_by: USER.id,
+          reached_out_by_email: USER.email,
+        };
         leads = leads.map((l) => (l.id === updated.id ? updated : l));
+        events.set(updated.id, [...(events.get(updated.id) ?? []), event("PENDING", "REACHED_OUT", USER, now)]);
         return json(200, updated);
       }
     }

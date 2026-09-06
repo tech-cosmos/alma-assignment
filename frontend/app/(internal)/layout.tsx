@@ -1,5 +1,5 @@
 import { Brand } from "@/components/brand";
-import { LogoutButton } from "@/components/logout-button";
+import { UserMenu } from "@/components/user-menu";
 
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +10,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
             <Brand href="/leads" />
             <span className="eyebrow rounded-sm bg-ink px-1.5 py-0.5 text-[0.6rem] text-ink-foreground">Internal</span>
           </div>
-          <LogoutButton />
+          <UserMenu />
         </div>
       </header>
       <div className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">{children}</div>

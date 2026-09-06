@@ -223,6 +223,7 @@
           "leads"
         ],
         "summary": "Get Lead",
+        "description": "One lead plus its full history (oldest event first).",
         "operationId": "get_lead_api_v1_leads__lead_id__get",
         "parameters": [
           {
@@ -242,7 +243,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LeadRead"
+                  "$ref": "#/components/schemas/LeadDetail"
                 }
               }
             }
@@ -319,6 +320,7 @@
           "leads"
         ],
         "summary": "Download Resume",
+        "description": "Serve the resume inline (so PDFs render in the browser) or as an attachment.",
         "operationId": "download_resume_api_v1_leads__lead_id__resume_get",
         "parameters": [
           {
@@ -330,6 +332,18 @@
               "format": "uuid",
               "title": "Lead Id"
             }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force a save dialog instead of inline",
+              "default": false,
+              "title": "Download"
+            },
+            "description": "Force a save dialog instead of inline"
           }
         ],
         "responses": {
@@ -404,6 +418,185 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "LeadCounts": {
+        "properties": {
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          },
+          "reached_out": {
+            "type": "integer",
+            "title": "Reached Out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending",
+          "reached_out"
+        ],
+        "title": "LeadCounts"
+      },
+      "LeadDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "first_name": {
+            "type": "string",
+            "title": "First Name"
+          },
+          "last_name": {
+            "type": "string",
+            "title": "Last Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "resume_name": {
+            "type": "string",
+            "title": "Resume Name"
+          },
+          "resume_type": {
+            "type": "string",
+            "title": "Resume Type"
+          },
+          "state": {
+            "$ref": "#/components/schemas/LeadState"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "reached_out_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reached Out At"
+          },
+          "reached_out_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reached Out By"
+          },
+          "reached_out_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reached Out By Email"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/LeadEventRead"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "first_name",
+          "last_name",
+          "email",
+          "resume_name",
+          "resume_type",
+          "state",
+          "created_at",
+          "updated_at",
+          "reached_out_at",
+          "reached_out_by",
+          "events"
+        ],
+        "title": "LeadDetail"
+      },
+      "LeadEventRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "from_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LeadState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to_state": {
+            "$ref": "#/components/schemas/LeadState"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "actor_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Email"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "from_state",
+          "to_state",
+          "actor_id",
+          "actor_email",
+          "created_at"
+        ],
+        "title": "LeadEventRead",
+        "description": "One entry in a lead's history. ``actor_*`` are null for the prospect's submission."
+      },
       "LeadList": {
         "properties": {
           "items": {
@@ -424,6 +617,9 @@
           "offset": {
             "type": "integer",
             "title": "Offset"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/LeadCounts"
           }
         },
         "type": "object",
@@ -431,7 +627,8 @@
           "items",
           "total",
           "limit",
-          "offset"
+          "offset",
+          "counts"
         ],
         "title": "LeadList"
       },
@@ -498,6 +695,17 @@
               }
             ],
             "title": "Reached Out By"
+          },
+          "reached_out_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reached Out By Email"
           }
         },
         "type": "object",

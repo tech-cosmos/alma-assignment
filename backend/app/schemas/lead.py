@@ -26,6 +26,29 @@ class LeadRead(BaseModel):
     updated_at: datetime
     reached_out_at: datetime | None
     reached_out_by: uuid.UUID | None
+    reached_out_by_email: str | None = None
+
+
+class LeadEventRead(BaseModel):
+    """One entry in a lead's history. ``actor_*`` are null for the prospect's submission."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    from_state: LeadState | None
+    to_state: LeadState
+    actor_id: uuid.UUID | None
+    actor_email: str | None
+    created_at: datetime
+
+
+class LeadDetail(LeadRead):
+    events: list[LeadEventRead]
+
+
+class LeadCounts(BaseModel):
+    pending: int
+    reached_out: int
 
 
 class LeadList(BaseModel):
@@ -33,6 +56,8 @@ class LeadList(BaseModel):
     total: int
     limit: int
     offset: int
+    # Counts across all leads, independent of the ``state`` filter (for the filter tabs).
+    counts: LeadCounts
 
 
 class LeadStateUpdate(BaseModel):
