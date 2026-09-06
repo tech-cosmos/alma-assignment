@@ -34,6 +34,7 @@ class LeadNotifier:
             email=lead.email,
             resume_name=lead.resume_name,
             public_web_url=self._settings.public_web_url,
+            submitted_at=lead.created_at,
         )
         return EmailMessage(
             to=self._settings.attorney_email,

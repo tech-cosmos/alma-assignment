@@ -12,6 +12,7 @@ Run `git log --oneline` to see the split. Plain `git merge` commits carry no pre
 | frontend/ (all) | agent | Track C commit `5571092` |
 | docker-compose.yml, backend/Dockerfile, Makefile, .github/, .env.example, README.md, docs/DESIGN.md | agent | Track D commit `3810342`; DESIGN.md corrected during merge review |
 | backend/.dockerignore | agent | Added during Track D review |
+| backend/app/adapters/email/templates.py, backend/tests/adapters/test_email_templates.py | agent | HTML email redesign, commit `0acba7b`; `submitted_at` wiring in notify.py added by the integrating agent |
 | docs/architecture/ (Archify JSON, HTML, PNG, SVG) and the diagram embeds in README.md and docs/DESIGN.md | agent | Generated with Archify from the code; commit `a0ad182` |
 | backend/app/models/lead_event.py, backend/alembic/versions/0002_lead_events.py, frontend/components/{resume-viewer,lead-timeline,state-tabs,pagination,relative-time,copy-button,user-menu}.tsx and related edits | agent | UI pass built in a separate workspace, snapshotted and merged by the integrating agent |
 | frontend/app/(internal)/leads/[id]/page.tsx, frontend/components/lead-detail.tsx, frontend/components/state-badge.tsx | agent | Lead detail page added after Shivam found the email link 404 (caught issue 8) |
