@@ -34,12 +34,32 @@ Each entry: what the agent produced, why it was wrong, how it was caught, and th
 
 ## Delegation ledger
 
+One row per unit of work. `Who` is one of `agent`, `Shivam`, or `agent, directed by Shivam` (agent draft with human review or fixes). `Why` explains the choice of who did it, not what it is. Rows are added by whoever merges the work, from commit history and the track's own notes; nothing is added speculatively.
+
+### Design phase
+
 | Task | Who | Why |
 |---|---|---|
 | Assignment retrieval and summary | agent | Mechanical, verifiable against the source |
 | Stack research (pricing, beta status, limits) | agent, directed by Shivam | Fast fan-out over docs; every number was sourced |
 | Stack decisions | Shivam | Judgement calls: maturity over novelty, SES over Cloudflare/Resend |
 | `docs/PLAN.md` | agent from Shivam's decisions | Structured write-up of agreed decisions |
+
+### Build phase
+
+Filled in per track as each track branch is reviewed and merged (`docs/PLAN.md` section 7). Commit prefixes (`[agent]`, `[hand]`, `[agent+edit]`) are the source of truth; this table summarises them.
+
+| Track | Task | Who | Why | Commits |
+|---|---|---|---|---|
+
+Tracks: A backend core, B adapters, C frontend, D ops and docs.
+
+### Verification and merge
+
+What the human checked before merging each track, and what was changed as a result. Anything that turns out to be a bug goes under "Caught issues" above instead.
+
+| Track | Checked by | What was verified | Outcome |
+|---|---|---|---|
 
 ## Transcript excerpts
 

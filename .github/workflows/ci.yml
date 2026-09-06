@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (ruff, mypy, pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: alma
+          POSTGRES_PASSWORD: alma
+          POSTGRES_DB: alma
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alma -d alma"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://alma:alma@localhost:5432/alma
+      JWT_SECRET: ci-only-secret
+      ATTORNEY_EMAIL: attorney@example.com
+      SEED_USER_EMAIL: attorney@example.com
+      SEED_USER_PASSWORD: password123
+      EMAIL_PROVIDER: console
+      EMAIL_FROM: no-reply@example.com
+      STORAGE_PROVIDER: local
+      STORAGE_LOCAL_DIR: ${{ runner.temp }}/resumes
+      PUBLIC_WEB_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (format)
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy .
+
+      - name: Alembic migrations apply cleanly
+        run: uv run alembic upgrade head
+
+      - name: Pytest
+        run: uv run pytest -q
+
+  frontend:
+    name: Frontend (eslint, tsc)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+  compose:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
