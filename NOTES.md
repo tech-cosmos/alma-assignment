@@ -1,7 +1,7 @@
 # NOTES — attribution of agent vs. hand-written work
 
 Commit subjects are prefixed `[agent]`, `[hand]`, or `[agent+edit]`. Agent-authored commits carry a `Co-Authored-By` trailer.
-Run `git log --oneline` to see the split; `scripts/agent_stats.sh` (added later) summarises it.
+Run `git log --oneline` to see the split. Plain `git merge` commits carry no prefix; they introduce no code of their own, and the merged commits they bring in are prefixed.
 
 | Path | Origin | Notes |
 |---|---|---|
