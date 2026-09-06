@@ -223,7 +223,7 @@
           "leads"
         ],
         "summary": "Get Lead",
-        "description": "One lead plus its full history (oldest event first).",
+        "description": "One lead plus its full history and attorney notes (each oldest first).",
         "operationId": "get_lead_api_v1_leads__lead_id__get",
         "parameters": [
           {
@@ -244,6 +244,60 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LeadDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/leads/{lead_id}/notes": {
+      "post": {
+        "tags": [
+          "leads"
+        ],
+        "summary": "Create Note",
+        "description": "Append a note to a lead. Notes are plain text and cannot be edited or deleted.",
+        "operationId": "create_note_api_v1_leads__lead_id__notes_post",
+        "parameters": [
+          {
+            "name": "lead_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lead Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeadNoteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadNoteRead"
                 }
               }
             }
@@ -517,6 +571,13 @@
             },
             "type": "array",
             "title": "Events"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/LeadNoteRead"
+            },
+            "type": "array",
+            "title": "Notes"
           }
         },
         "type": "object",
@@ -532,7 +593,8 @@
           "updated_at",
           "reached_out_at",
           "reached_out_by",
-          "events"
+          "events",
+          "notes"
         ],
         "title": "LeadDetail"
       },
@@ -631,6 +693,65 @@
           "counts"
         ],
         "title": "LeadList"
+      },
+      "LeadNoteCreate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "LeadNoteCreate",
+        "description": "Body of ``POST /leads/{id}/notes``. Whitespace is trimmed before the length check."
+      },
+      "LeadNoteRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "author_email": {
+            "type": "string",
+            "title": "Author Email"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author_id",
+          "author_email",
+          "body",
+          "created_at"
+        ],
+        "title": "LeadNoteRead"
       },
       "LeadRead": {
         "properties": {

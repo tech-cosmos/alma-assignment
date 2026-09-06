@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
 
-import { type ApiFailure, type LeadDetail as LeadDetailData, getLead, logout, markReachedOut } from "@/lib/api";
+import { type ApiFailure, type LeadDetail as LeadDetailData, type LeadNote, getLead, logout, markReachedOut } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/copy-button";
 import { LeadTimeline } from "@/components/lead-timeline";
+import { NoteComposer } from "@/components/note-composer";
 import { RelativeTime } from "@/components/relative-time";
 import { ResumeViewer } from "@/components/resume-viewer";
 import { StateBadge } from "@/components/state-badge";
@@ -75,6 +76,21 @@ export function LeadDetail({ id }: { id: string }) {
     if (result.error.status === 409 || result.error.status === 404) void load({ quiet: true });
   }
 
+  function noteAdded(note: LeadNote) {
+    // The server returned the stored row, so append it directly; no reload needed.
+    setStatus((current) => (current.kind === "ready" ? { kind: "ready", lead: { ...current.lead, notes: [...current.lead.notes, note] } } : current));
+  }
+
+  async function noteFailed(error: ApiFailure) {
+    if (error.status === 401) {
+      await logout();
+      router.replace(`/login?next=${encodeURIComponent(`/leads/${id}`)}`);
+      return;
+    }
+    setActionError(error.message);
+    if (error.status === 404) void load({ quiet: true });
+  }
+
   return (
     <div className="space-y-6">
       <Link href="/leads" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:underline">
@@ -118,12 +134,23 @@ export function LeadDetail({ id }: { id: string }) {
         </Alert>
       )}
 
-      {status.kind === "ready" && <LeadView lead={status.lead} busy={busy} error={actionError} onReachOut={reachOut} />}
+      {status.kind === "ready" && (
+        <LeadView lead={status.lead} busy={busy} error={actionError} onReachOut={reachOut} onNoteAdded={noteAdded} onNoteFailed={noteFailed} />
+      )}
     </div>
   );
 }
 
-function LeadView({ lead, busy, error, onReachOut }: { lead: LeadDetailData; busy: boolean; error: string | null; onReachOut: () => void }) {
+type LeadViewProps = {
+  lead: LeadDetailData;
+  busy: boolean;
+  error: string | null;
+  onReachOut: () => void;
+  onNoteAdded: (note: LeadNote) => void;
+  onNoteFailed: (error: ApiFailure) => void;
+};
+
+function LeadView({ lead, busy, error, onReachOut, onNoteAdded, onNoteFailed }: LeadViewProps) {
   const done = lead.state === "REACHED_OUT";
   return (
     <section className="space-y-6">
@@ -204,8 +231,11 @@ function LeadView({ lead, busy, error, onReachOut }: { lead: LeadDetailData; bus
           </Card>
 
           <Card title="History">
+            <div className="border-b border-border px-5 py-4">
+              <NoteComposer leadId={lead.id} onAdded={onNoteAdded} onFailure={onNoteFailed} />
+            </div>
             <div className="px-5 py-4">
-              <LeadTimeline events={lead.events} />
+              <LeadTimeline events={lead.events} notes={lead.notes} />
             </div>
           </Card>
         </div>

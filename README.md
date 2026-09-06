@@ -40,6 +40,7 @@ Both values come from `SEED_USER_EMAIL` and `SEED_USER_PASSWORD` in `.env.exampl
 1. Open http://localhost:3000 and submit the form with a PDF, DOC or DOCX resume (max 5 MB).
 2. Open http://localhost:8025. Two messages arrive: a confirmation addressed to the prospect and a notification addressed to `ATTORNEY_EMAIL` with a link to the lead.
 3. Open http://localhost:3000/leads, log in, click the lead to open it (the PDF renders on the page), and click **Mark reached out**. The state changes from `PENDING` to `REACHED_OUT`, and the lead's history records who did it and when.
+4. On the same page, type into the note box under **History** and click **Add note**. The note appears in the timeline with your email and stays after a reload; notes cannot be edited or deleted.
 
 ### Useful commands
 

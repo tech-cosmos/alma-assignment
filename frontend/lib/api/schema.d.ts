@@ -99,11 +99,31 @@ export interface paths {
         };
         /**
          * Get Lead
-         * @description One lead plus its full history (oldest event first).
+         * @description One lead plus its full history and attorney notes (each oldest first).
          */
         get: operations["get_lead_api_v1_leads__lead_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/{lead_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Note
+         * @description Append a note to a lead. Notes are plain text and cannot be edited or deleted.
+         */
+        post: operations["create_note_api_v1_leads__lead_id__notes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -213,6 +233,8 @@ export interface components {
             reached_out_by_email?: string | null;
             /** Events */
             events: components["schemas"]["LeadEventRead"][];
+            /** Notes */
+            notes: components["schemas"]["LeadNoteRead"][];
         };
         /**
          * LeadEventRead
@@ -247,6 +269,33 @@ export interface components {
             /** Offset */
             offset: number;
             counts: components["schemas"]["LeadCounts"];
+        };
+        /**
+         * LeadNoteCreate
+         * @description Body of ``POST /leads/{id}/notes``. Whitespace is trimmed before the length check.
+         */
+        LeadNoteCreate: {
+            /** Body */
+            body: string;
+        };
+        /** LeadNoteRead */
+        LeadNoteRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Author Id */
+            author_id: string | null;
+            /** Author Email */
+            author_email: string;
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** LeadRead */
         LeadRead: {
@@ -511,6 +560,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeadDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_note_api_v1_leads__lead_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeadNoteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadNoteRead"];
                 };
             };
             /** @description Validation Error */

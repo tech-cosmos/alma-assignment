@@ -115,7 +115,8 @@ users
 |---|---|---|---|
 | POST | /api/v1/leads | none | multipart: fields + resume. Returns 201 + lead |
 | GET | /api/v1/leads | JWT | list, `?state=&limit=&offset=`; response also carries global `counts` per state |
-| GET | /api/v1/leads/{id} | JWT | single lead plus `events` (history, oldest first) |
+| GET | /api/v1/leads/{id} | JWT | single lead plus `events` (history, oldest first) and `notes` (attorney notes, oldest first) |
+| POST | /api/v1/leads/{id}/notes | JWT | body `{body: string}`; trimmed, 1..2000 chars else 422; 404 unknown lead. Returns 201 + note. Append-only: no update or delete |
 | PATCH | /api/v1/leads/{id}/state | JWT | body `{state: "REACHED_OUT"}`; 409 on invalid transition |
 | GET | /api/v1/leads/{id}/resume | JWT | 302 to signed URL (s3) or streams file (local); inline by default, `?download=true` forces a save |
 | POST | /api/v1/auth/login | none | sets httpOnly cookie, returns user |
@@ -126,6 +127,7 @@ users
 Response shapes (fixed by Track A):
 - Lead: `{id, first_name, last_name, email, resume_name, resume_type, state, created_at, updated_at, reached_out_at, reached_out_by, reached_out_by_email}`. `resume_key` is never exposed.
 - Lead event: `{id, from_state, to_state, actor_id, actor_email, created_at}`; `from_state` and the actor fields are null for the prospect's submission.
+- Lead note: `{id, author_id, author_email, body, created_at}`; the author is the signed-in user at creation, `author_email` is a snapshot, `author_id` becomes null if that user is removed. Notes do not touch the state machine or `lead_events`.
 - List: `{items: Lead[], total, limit, offset, counts: {pending, reached_out}}`; `limit` 1..200 (default 50), `offset` >= 0. `counts` are global, independent of the `state` filter.
 - Auth cookie is named `access_token`; `Authorization: Bearer <jwt>` is accepted too.
 - Adapter selection: `app/adapters/<email|storage>/<provider>.py` must expose `create_adapter(settings)`; `api/deps.py` imports it by `EMAIL_PROVIDER` / `STORAGE_PROVIDER`.

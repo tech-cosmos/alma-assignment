@@ -5,6 +5,7 @@ import type { components, operations } from "./schema";
 export type Lead = components["schemas"]["LeadRead"];
 export type LeadDetail = components["schemas"]["LeadDetail"];
 export type LeadEvent = components["schemas"]["LeadEventRead"];
+export type LeadNote = components["schemas"]["LeadNoteRead"];
 export type LeadCounts = components["schemas"]["LeadCounts"];
 export type LeadState = components["schemas"]["LeadState"];
 export type LeadList = components["schemas"]["LeadList"];
@@ -84,6 +85,16 @@ export function markReachedOut(id: string): Promise<ApiResult<Lead>> {
     client.PATCH("/api/v1/leads/{lead_id}/state", {
       params: { path: { lead_id: id } },
       body: { state: "REACHED_OUT" },
+    }),
+  );
+}
+
+/** POST /api/v1/leads/{id}/notes — append-only attorney note; the server trims and enforces 1..2000 chars. */
+export function addNote(id: string, body: string): Promise<ApiResult<LeadNote>> {
+  return run(() =>
+    client.POST("/api/v1/leads/{lead_id}/notes", {
+      params: { path: { lead_id: id } },
+      body: { body },
     }),
   );
 }

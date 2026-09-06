@@ -29,8 +29,9 @@ export function toFailure(status: number, body: unknown, fallback?: string): Api
     } else if (Array.isArray(detail)) {
       for (const item of detail as ValidationItem[]) {
         const loc = Array.isArray(item.loc) ? item.loc : [];
-        // loc looks like ["body", "email"] or ["query", "state"]; take the last string segment.
-        const field = [...loc].reverse().find((p): p is string => typeof p === "string" && p !== "body");
+        // loc looks like ["body", "email"] or ["query", "state"]; the first segment is the location,
+        // so skip it and take the last string segment (a field may itself be named "body").
+        const field = [...loc.slice(1)].reverse().find((p): p is string => typeof p === "string");
         if (field && item.msg && !fields[field]) fields[field] = humanise(item.msg);
       }
       if (Object.keys(fields).length > 0) message = "Please fix the highlighted fields.";

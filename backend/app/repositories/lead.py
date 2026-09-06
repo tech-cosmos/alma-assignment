@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.lead import Lead, LeadState
 from app.models.lead_event import LeadEvent
+from app.models.lead_note import LeadNote
 
 
 class LeadRepository:
@@ -56,6 +57,20 @@ class LeadRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def add_note(self, note: LeadNote) -> LeadNote:
+        self._session.add(note)
+        await self._session.flush()
+        return note
+
+    async def list_notes(self, lead_id: uuid.UUID) -> Sequence[LeadNote]:
+        """Attorney notes for one lead, oldest first."""
+        stmt = (
+            select(LeadNote)
+            .where(LeadNote.lead_id == lead_id)
+            .order_by(LeadNote.created_at, LeadNote.id)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def commit(self) -> None:
         await self._session.commit()
 
@@ -63,3 +78,7 @@ class LeadRepository:
         """Reload server-generated columns (timestamps) after a commit."""
         await self._session.refresh(lead)
         return lead
+
+    async def refresh_note(self, note: LeadNote) -> LeadNote:
+        await self._session.refresh(note)
+        return note

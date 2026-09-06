@@ -2,7 +2,8 @@
  * In-memory stand-in for the FastAPI service, enabled with NEXT_PUBLIC_API_MOCK=true.
  * It implements the contract in docs/PLAN.md section 5 closely enough to drive every
  * screen: multipart lead creation, listing with a state filter and counts, the single legal
- * state transition (409 otherwise) with a history entry, and cookie-based login/logout.
+ * state transition (409 otherwise) with a history entry, append-only attorney notes, and
+ * cookie-based login/logout.
  *
  * Login: attorney@example.com / password123 (matches the seeded user in section 6).
  * The auth cookie is set with document.cookie (not httpOnly) so middleware.ts sees it.
@@ -12,6 +13,7 @@ import type { components } from "./schema";
 type Lead = components["schemas"]["LeadRead"];
 type LeadDetail = components["schemas"]["LeadDetail"];
 type LeadEvent = components["schemas"]["LeadEventRead"];
+type LeadNote = components["schemas"]["LeadNoteRead"];
 type LeadState = components["schemas"]["LeadState"];
 
 const COOKIE = "access_token";
@@ -20,6 +22,8 @@ const PASSWORD = "password123";
 const LATENCY_MS = 350;
 
 const events = new Map<string, LeadEvent[]>();
+const notes = new Map<string, LeadNote[]>();
+const NOTE_MAX_CHARS = 2000;
 
 const seed: Lead[] = [
   lead("Priya", "Natarajan", "priya.natarajan@example.com", "priya-natarajan-cv.pdf", "application/pdf", "2026-09-05T14:12:00Z", "REACHED_OUT"),
@@ -38,6 +42,10 @@ function lead(first: string, last: string, email: string, name: string, type: st
   const history: LeadEvent[] = [event(null, "PENDING", null, created)];
   if (reachedAt) history.push(event("PENDING", "REACHED_OUT", USER, reachedAt));
   events.set(id, history);
+  if (reachedAt) {
+    const noteAt = new Date(new Date(created).getTime() + 90 * 60 * 1000).toISOString();
+    notes.set(id, [note("Spoke briefly on the phone; sending the intake questionnaire today.", noteAt)]);
+  }
   return {
     id,
     first_name: first,
@@ -56,6 +64,10 @@ function lead(first: string, last: string, email: string, name: string, type: st
 
 function event(from: LeadState | null, to: LeadState, actor: typeof USER | null, at: string): LeadEvent {
   return { id: crypto.randomUUID(), from_state: from, to_state: to, actor_id: actor?.id ?? null, actor_email: actor?.email ?? null, created_at: at };
+}
+
+function note(body: string, at: string): LeadNote {
+  return { id: crypto.randomUUID(), author_id: USER.id, author_email: USER.email, body, created_at: at };
 }
 
 function hasCookie(): boolean {
@@ -149,14 +161,24 @@ export async function mockFetch(input: Request): Promise<Response> {
       return json(200, { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset, counts });
     }
 
-    const single = path.match(/^\/api\/v1\/leads\/([^/]+)(\/state|\/resume)?$/);
+    const single = path.match(/^\/api\/v1\/leads\/([^/]+)(\/state|\/resume|\/notes)?$/);
     if (single) {
       const target = leads.find((l) => l.id === single[1]);
       if (!target) return detail(404, "Lead not found");
       const sub = single[2];
       if (!sub && method === "GET") {
-        const body: LeadDetail = { ...target, events: events.get(target.id) ?? [] };
+        const body: LeadDetail = { ...target, events: events.get(target.id) ?? [], notes: notes.get(target.id) ?? [] };
         return json(200, body);
+      }
+      if (sub === "/notes" && method === "POST") {
+        const payload = (await input.json().catch(() => ({}))) as { body?: unknown };
+        const text = typeof payload.body === "string" ? payload.body.trim() : "";
+        if (typeof payload.body !== "string") return validation([["body", "Field required"]]);
+        if (!text) return validation([["body", "String should have at least 1 character"]]);
+        if (text.length > NOTE_MAX_CHARS) return validation([["body", `String should have at most ${NOTE_MAX_CHARS} characters`]]);
+        const created = note(text, new Date().toISOString());
+        notes.set(target.id, [...(notes.get(target.id) ?? []), created]);
+        return json(201, created);
       }
       if (sub === "/resume" && method === "GET") {
         const disposition = url.searchParams.get("download") === "true" ? "attachment" : "inline";

@@ -81,6 +81,8 @@ erDiagram
     USERS ||--o{ LEADS : "reached_out_by"
     LEADS ||--o{ LEAD_EVENTS : "history"
     USERS ||--o{ LEAD_EVENTS : "actor_id"
+    LEADS ||--o{ LEAD_NOTES : "notes"
+    USERS ||--o{ LEAD_NOTES : "author_id"
     USERS {
         uuid id PK
         text email UK
@@ -110,6 +112,14 @@ erDiagram
         text actor_email "snapshot"
         timestamptz created_at
     }
+    LEAD_NOTES {
+        uuid id PK
+        uuid lead_id FK
+        uuid author_id FK "null if the user is removed"
+        text author_email "snapshot"
+        text body "plain text, 1..2000 chars"
+        timestamptz created_at
+    }
 ```
 
 Notes:
@@ -117,6 +127,7 @@ Notes:
 - `resume_key` is an opaque key resolved by the storage adapter. The database never contains a filesystem path or URL, so switching storage backends does not touch the data.
 - `reached_out_at` and `reached_out_by` are the quick-lookup columns for the list view (the API joins the user to add `reached_out_by_email`).
 - `lead_events` is the append-only history behind the timeline on the lead page: one row per state change (`from_state` is null for the submission itself), written in the same transaction as the lead row. `actor_email` is snapshotted so history stays readable if a user is later removed. Migration `0002` backfills it from the existing leads.
+- `lead_notes` holds attorney notes (migration `0003`). Notes are append-only plain text: there is no update or delete endpoint, so the timeline is a faithful record of what was written and when. `author_email` is snapshotted like `actor_email` on events, and `author_id` is nulled if the user is removed. Notes deliberately do not touch `lead_events` or the state machine; they are shown interleaved with events on the lead page, sorted by `created_at`.
 - Alembic owns the schema. The enum is a Postgres enum type created in the first migration.
 
 ## 4. Lead state machine
@@ -219,6 +230,7 @@ The application is a standard ASGI app in a standard container, so it runs on an
 - **Secrets only via environment.** `.env` is gitignored; `.env.example` contains only local defaults. Compose falls back to the same defaults so no secret is ever required to run.
 - **Non-root container.** The API image runs as an unprivileged user.
 - **Email failure isolation.** Emails are sent after commit in background tasks; a provider outage cannot lose a lead or leak an internal error to the prospect.
+- **Notes are plain text and append-only.** Note bodies are stored and rendered as text, never as HTML, so a pasted `<script>` is just characters on the page. The server trims and caps them at 2,000 characters. There is no edit or delete, and the author's email is snapshotted at write time, so a note cannot be reworded or re-attributed after the fact.
 
 ## 12. Testing strategy
 
