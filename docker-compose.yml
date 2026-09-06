@@ -1,0 +1,94 @@
+# One command to run everything locally: `docker compose up`
+#
+# Defaults below mirror .env.example, so no .env file is required. If a .env file exists
+# next to this file, Compose loads it automatically and its values override the defaults.
+# No cloud credentials are needed: email goes to Mailpit, resumes go to a local volume.
+
+name: alma
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: alma
+      POSTGRES_PASSWORD: alma
+      POSTGRES_DB: alma
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alma -d alma"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  mailpit:
+    # Local SMTP sink with a web inbox. Both emails sent on lead submission land here.
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI: http://localhost:8025
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://alma:alma@db:5432/alma}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      ATTORNEY_EMAIL: ${ATTORNEY_EMAIL:-attorney@example.com}
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL:-attorney@example.com}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-password123}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@example.com}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      STORAGE_LOCAL_DIR: ${STORAGE_LOCAL_DIR:-/data/resumes}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+    volumes:
+      - resumes:${STORAGE_LOCAL_DIR:-/data/resumes}
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* values are inlined at build time, so pass it as a build arg too.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Server-side calls from the Next.js container reach the API over the compose network.
+      API_URL_INTERNAL: http://api:8000
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  pgdata:
+  resumes:
