@@ -1,0 +1,26 @@
+# Private material that must never be published (prompt logs, session transcripts).
+# Submitted separately via the Ashby assignment upload.
+private/
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
