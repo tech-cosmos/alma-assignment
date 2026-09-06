@@ -30,6 +30,37 @@ Each entry: what the agent produced, why it was wrong, how it was caught, and th
 - **How it was caught:** Shivam pasted the Email Service "send emails" docs link and asked the agent to research and confirm.
 - **Fix:** The agent fetched the docs, pricing, limits, and launch timeline. Finding: Email Sending was announced Sept 2025, private beta Nov 2025, public beta Apr 16 2026, and still beta with no GA or SLA. Shivam decided on Amazon SES for maturity; the agent's price research (SES $0.10/1k vs Cloudflare $0.35/1k vs Resend $0.90/1k) supported that choice. Recorded in `docs/PLAN.md` section 2.
 
+### 3. Tracks A and B built the adapter layer to two different contracts (build phase)
+
+- **What the agents produced:** Track A defined `EmailAdapter.send(message: EmailMessage)` and a storage protocol of `put/delete/stream/presigned_url`, with each provider module exposing `create_adapter(settings)`. Track B, working in parallel, implemented `send(to, subject, html, text)` and `put/get_url/open` with `build_*_adapter(provider, ...)` factories, and shipped its fakes as a `tests/fakes/` package while Track A had `tests/fakes.py`. Neither branch could import the other's work.
+- **Why it was wrong:** Root cause was the integrator's prompts, not the track agents. Track B's prompt spelled out concrete signatures while Track A's prompt said "define the protocols yourself". Both agents followed their instructions exactly. Track B also started before Track A had pushed, so there was no `base.py` to match.
+- **How it was caught:** Merging B onto A produced add/add conflicts in both `base.py` files, and the merged test suite would not have imported. Caught by the integrating session before running anything.
+- **Fix:** Kept Track A's protocols (the routers, services and 30 tests already used them) and adapted Track B's five implementations to them. `stream()` was made `async` so a missing key raises `KeyError` before any response bytes are sent. Track B's `build_*` factories were replaced by `create_adapter(settings)` in each module, matching the importlib loader in `app.api.deps`. The two fakes were merged into one package with A's API plus B's call recording. Track B's HTML-escaped templates replaced Track A's plain-text emails. Commit `a9a41e4`.
+- **Lesson:** When parallel tracks share an interface, put the exact signatures in the shared plan before anyone starts, and give every agent the same text.
+
+### 4. Design doc described interfaces and validation logic that did not exist (build phase)
+
+- **What the agent produced:** Track D wrote `docs/DESIGN.md` in parallel with the code and described an `EmailSender.send(to, subject, text, html)` interface, `Storage.url`/`Storage.open` methods, fakes named `FakeEmailSender`/`FakeStorage`, a `.docx` check based on `[Content_Types].xml`, validation "by extension", and per-test rollback. None of those matched the merged code: the real protocol is `EmailAdapter.send(EmailMessage)`, storage is `put/delete/stream/presigned_url`, `.docx` is detected by a `word/document.xml` entry, the extension is ignored entirely, and tests truncate rather than roll back.
+- **Why it was wrong:** Track D had no code to read, so it wrote plausible names from the plan and the prompt. A design doc that contradicts the code is worse than a thin one, because a reviewer who opens both will trust neither.
+- **How it was caught:** Line-by-line read of `DESIGN.md` against `backend/app` during the Track D merge review.
+- **Fix:** Sections 2, 5, 6, 11 and 12 corrected to the real names and behaviour, and an adapter unit-test line added. The unverified SES "3,000 free per month for 12 months" claim was replaced with the credits wording from the pricing page fetched during design. Commit follows the Track C merge.
+- **Lesson:** Documentation tracks should run after, or be re-verified against, the code they describe.
+
+### 5. Frontend Dockerfile copied a directory that did not exist (build phase)
+
+- **What the agent produced:** Track C's `frontend/Dockerfile` has `COPY --from=builder /app/public ./public`, the standard Next.js standalone recipe. The app has no `public/` directory (fonts are vendored under `app/fonts`), so `docker compose up --build` failed on the `web` image with "/app/public: not found". Track C reported the Dockerfile as done and noted it "matches what Track D's compose already assumes", but had never run the build.
+- **Why it was wrong:** A copied recipe was not checked against the project it was copied into. Local `next build` succeeded, so nothing in Track C's own gates exercised the Dockerfile.
+- **How it was caught:** First `docker compose up --build` during integration.
+- **Fix:** Added `frontend/public/.gitkeep` so the directory exists and the recipe stays standard for future static assets. Image builds and the `web` container serves on port 3000.
+- **Lesson:** "Dockerfile written" is not "image builds". Track prompts should require `docker build` as a gate whenever a Dockerfile is part of the deliverable.
+
+### 6. Frontend's hand-written OpenAPI spec drifted from the real one (build phase)
+
+- **What the agent produced:** Track C, working without a running backend, wrote `frontend/openapi.json` by hand with schema names `LeadOut`/`UserOut`, path parameter `{id}` and operation id `list_leads`. FastAPI actually emits `LeadRead`/`UserRead`, `{lead_id}` and `list_leads_api_v1_leads_get`. The app worked at runtime because the URLs are identical, but the documented `npm run openapi:pull` workflow would have regenerated the types and broken the build with six type errors.
+- **Why it was wrong:** The generated-client claim in the design only holds if the spec is actually generated. A hand-written spec that diverges silently is a trap for the next person who runs the pull script.
+- **How it was caught:** Integration dumped the real spec from `app.openapi()`, diffed the schema and path lists, then ran the regeneration and `tsc`.
+- **Fix:** Replaced `frontend/openapi.json` with the backend's real output, regenerated `schema.d.ts`, and updated the six references in `lib/api/index.ts` and `lib/api/mock.ts`. `tsc`, `eslint` and `next build` pass on the regenerated types.
+
 **Lesson applied going forward:** the agent must verify platform capabilities against current docs before ruling an option out, especially for fast-moving platforms. This is now the working rule for the rest of the build.
 
 ## Delegation ledger
@@ -51,6 +82,12 @@ Filled in per track as each track branch is reviewed and merged (`docs/PLAN.md` 
 
 | Track | Task | Who | Why | Commits |
 |---|---|---|---|---|
+| A | FastAPI core: config, models, migration, repositories, services, routers, auth, seed, 30 tests | agent | Pattern-heavy and fully test-verifiable; the state transition rule was reviewed by hand at merge | `721407a` |
+| B | Email adapters (console, smtp, ses), storage adapters (local, s3), templates, fakes, 44 tests | agent | Thin wrappers over well-documented SDKs; moto and aiosmtpd make them verifiable without credentials | `dd62023` |
+| C | Next.js form, login, leads list, middleware, generated client, mock API, Dockerfile | agent | UI scaffolding is where agents are fastest; verified with tsc, eslint, build and a browser run against the real API | `5571092` |
+| D | Compose, Dockerfile, Makefile, CI, .env.example, README, DESIGN.md | agent | Boilerplate with a clear spec; the design doc was then corrected by hand-directed review (caught issue 4) | `3810342` |
+| Integration | Reconcile A and B adapter contracts, rewrite B tests, wire templates into the notifier | agent, directed by Shivam | Mechanical once the decision (keep A's protocol) was made; decision reasoning is in caught issue 3 | `a9a41e4` |
+| Integration | Design doc corrections, `.dockerignore`, end-to-end verification | agent, directed by Shivam | Verification against running containers, not reports | see verification table |
 
 Tracks: A backend core, B adapters, C frontend, D ops and docs.
 
@@ -60,6 +97,12 @@ What the human checked before merging each track, and what was changed as a resu
 
 | Track | Checked by | What was verified | Outcome |
 |---|---|---|---|
+| A | integrating agent, on Shivam's behalf | `uv run pytest` (30 pass), `ruff check`, `ruff format --check`, `mypy --strict`, `alembic check` against a live Postgres 17 | Merged as-is |
+| B | integrating agent | Read every adapter and test; attempted merge onto A | Contract mismatch found (caught issue 3); adapters and tests rewritten; merged suite 80 pass, ruff, mypy clean |
+| D | integrating agent | `docker compose config`, Dockerfile expectations vs Track A (`app.main:app`, `alembic.ini`, `python -m app.seed`, `/api/v1/health`), CI YAML, README commands, DESIGN.md vs code | DESIGN.md drift (caught issue 4) fixed; `backend/.dockerignore` added so `COPY . .` cannot pull a host `.venv` into the image |
+| C | integrating agent | `npm ci`, `eslint`, `tsc --noEmit`, `next build`; read middleware, API client and error mapping against the section 5 contract | Merged; end-to-end run against the real API recorded below |
+| Compose end-to-end (API) | integrating agent | `docker compose up --build`; curl: health, create lead with PDF (201), fake PDF (422), list without cookie (401), login, list (envelope), PATCH to REACHED_OUT (200 with `reached_out_at`/`reached_out_by`), repeat (409), reverse (409), resume download bytes identical with correct headers, resume without cookie (401), state filter, logout then list (401). Mailpit: two messages per lead, attorney mail links to `/leads/{id}` with no attachment | Web image failed to build (caught issue 5); fixed, then every step passed |
+| Compose end-to-end (browser) | integrating agent | Headless Chromium via agent-browser: submitted the public form with a PDF, saw the "Received" state; `/leads` redirected to `/login?next=/leads`; logged in; both leads listed with resume links to the API; clicked "Mark reached out", button became disabled "Reached out"; no console or page errors | Passed. Frontend spec drift (caught issue 6) fixed afterwards and re-verified with `tsc`, `eslint`, `next build` |
 
 ## Transcript excerpts
 

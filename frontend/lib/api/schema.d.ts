@@ -4,67 +4,15 @@
  */
 
 export interface paths {
-    "/api/v1/leads": {
+    "/api/v1/health": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List leads */
-        get: operations["list_leads"];
-        put?: never;
-        /** Create a lead (public) */
-        post: operations["create_lead"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/leads/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a single lead */
-        get: operations["get_lead"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/leads/{id}/state": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Transition lead state (PENDING -> REACHED_OUT only) */
-        patch: operations["update_lead_state"];
-        trace?: never;
-    };
-    "/api/v1/leads/{id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download resume: 302 to a signed URL (s3) or streams the file (local) */
-        get: operations["get_lead_resume"];
+        /** Health */
+        get: operations["health_api_v1_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -82,8 +30,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Log in; sets an httpOnly auth cookie and returns the user */
-        post: operations["login"];
+        /** Login */
+        post: operations["login_api_v1_auth_login_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -99,23 +47,92 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Log out; clears the auth cookie */
-        post: operations["logout"];
+        /** Logout */
+        post: operations["logout_api_v1_auth_logout_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/health": {
+    "/api/v1/auth/me": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Health check including DB */
-        get: operations["health"];
+        /** Me */
+        get: operations["me_api_v1_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Leads */
+        get: operations["list_leads_api_v1_leads_get"];
+        put?: never;
+        /** Create Lead */
+        post: operations["create_lead_api_v1_leads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/{lead_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Lead */
+        get: operations["get_lead_api_v1_leads__lead_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/{lead_id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Lead State */
+        patch: operations["update_lead_state_api_v1_leads__lead_id__state_patch"];
+        trace?: never;
+    };
+    "/api/v1/leads/{lead_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Resume */
+        get: operations["download_resume_api_v1_leads__lead_id__resume_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -128,296 +145,143 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @enum {string} */
-        LeadState: "PENDING" | "REACHED_OUT";
-        LeadCreateForm: {
+        /** Body_create_lead_api_v1_leads_post */
+        Body_create_lead_api_v1_leads_post: {
+            /** First Name */
             first_name: string;
+            /** Last Name */
             last_name: string;
-            /** Format: email */
-            email: string;
             /**
-             * Format: binary
-             * @description PDF, DOC, or DOCX; max 5 MB; validated by magic bytes
+             * Email
+             * Format: email
              */
+            email: string;
+            /** Resume */
             resume: string;
         };
-        LeadOut: {
-            /** Format: uuid */
-            id: string;
-            first_name: string;
-            last_name: string;
-            /** Format: email */
-            email: string;
-            /** @description Original filename */
-            resume_name: string;
-            /** @description MIME type */
-            resume_type: string;
-            state: components["schemas"]["LeadState"];
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-            /** Format: date-time */
-            reached_out_at: string | null;
-            /** Format: uuid */
-            reached_out_by: string | null;
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
+        /** LeadList */
         LeadList: {
-            items: components["schemas"]["LeadOut"][];
+            /** Items */
+            items: components["schemas"]["LeadRead"][];
+            /** Total */
             total: number;
+            /** Limit */
             limit: number;
+            /** Offset */
             offset: number;
         };
+        /** LeadRead */
+        LeadRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Email */
+            email: string;
+            /** Resume Name */
+            resume_name: string;
+            /** Resume Type */
+            resume_type: string;
+            state: components["schemas"]["LeadState"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Reached Out At */
+            reached_out_at: string | null;
+            /** Reached Out By */
+            reached_out_by: string | null;
+        };
+        /**
+         * LeadState
+         * @enum {string}
+         */
+        LeadState: "PENDING" | "REACHED_OUT";
+        /** LeadStateUpdate */
         LeadStateUpdate: {
             state: components["schemas"]["LeadState"];
         };
+        /** LoginRequest */
         LoginRequest: {
-            /** Format: email */
+            /**
+             * Email
+             * Format: email
+             */
             email: string;
+            /** Password */
             password: string;
         };
-        UserOut: {
-            /** Format: uuid */
+        /** UserRead */
+        UserRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
             id: string;
-            /** Format: email */
+            /** Email */
             email: string;
-            /** Format: date-time */
-            created_at: string;
         };
-        Health: {
-            /** @enum {string} */
-            status: "ok" | "degraded";
-            /** @enum {string} */
-            db: "ok" | "error";
-        };
-        ErrorDetail: {
-            detail: string;
-        };
+        /** ValidationError */
         ValidationError: {
+            /** Location */
             loc: (string | number)[];
+            /** Message */
             msg: string;
+            /** Error Type */
             type: string;
-        };
-        HTTPValidationError: {
-            detail?: components["schemas"]["ValidationError"][];
-        };
-    };
-    responses: {
-        /** @description Missing or invalid auth cookie */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorDetail"];
-            };
-        };
-        /** @description Lead not found */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorDetail"];
-            };
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
-    parameters: {
-        LeadId: string;
-    };
+    responses: never;
+    parameters: never;
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list_leads: {
-        parameters: {
-            query?: {
-                state?: components["schemas"]["LeadState"];
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Page of leads */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LeadList"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_lead: {
+    health_api_v1_health_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["LeadCreateForm"];
-            };
-        };
-        responses: {
-            /** @description Lead created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LeadOut"];
-                };
-            };
-            /** @description Invalid resume (type, size, or magic bytes) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Resume larger than 5 MB */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_lead: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["LeadId"];
-            };
-            cookie?: never;
-        };
         requestBody?: never;
         responses: {
-            /** @description Lead */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LeadOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    update_lead_state: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["LeadId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LeadStateUpdate"];
-            };
-        };
-        responses: {
-            /** @description Updated lead */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LeadOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description Invalid transition (lead already REACHED_OUT) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
         };
     };
-    get_lead_resume: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["LeadId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Resume file (local storage) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/octet-stream": string;
-                };
-            };
-            /** @description Redirect to a signed URL (s3 storage) */
-            302: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    login: {
+    login_api_v1_auth_login_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -430,25 +294,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Logged in */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserOut"];
+                    "application/json": components["schemas"]["UserRead"];
                 };
             };
-            /** @description Bad credentials */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation error */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -459,7 +314,7 @@ export interface operations {
             };
         };
     };
-    logout: {
+    logout_api_v1_auth_logout_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -468,17 +323,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Logged out */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
         };
     };
-    health: {
+    me_api_v1_auth_me_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -487,22 +341,176 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Healthy */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Health"];
+                    "application/json": components["schemas"]["UserRead"];
                 };
             };
-            /** @description Unhealthy */
-            503: {
+        };
+    };
+    list_leads_api_v1_leads_get: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["LeadState"] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Health"];
+                    "application/json": components["schemas"]["LeadList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_lead_api_v1_leads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_lead_api_v1_leads_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_lead_api_v1_leads__lead_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_lead_state_api_v1_leads__lead_id__state_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeadStateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_resume_api_v1_leads__lead_id__resume_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

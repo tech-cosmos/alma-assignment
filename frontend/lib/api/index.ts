@@ -2,10 +2,10 @@ import { client } from "./client";
 import { type ApiResult, networkFailure, toFailure } from "./errors";
 import type { components, operations } from "./schema";
 
-export type Lead = components["schemas"]["LeadOut"];
+export type Lead = components["schemas"]["LeadRead"];
 export type LeadState = components["schemas"]["LeadState"];
 export type LeadList = components["schemas"]["LeadList"];
-export type User = components["schemas"]["UserOut"];
+export type User = components["schemas"]["UserRead"];
 
 export { API_URL, API_MOCK, resumeUrl } from "./client";
 export type { ApiFailure, ApiResult } from "./errors";
@@ -48,7 +48,7 @@ export function createLead(input: LeadInput): Promise<ApiResult<Lead>> {
 
 /** GET /api/v1/leads — tolerates either the `{items,...}` envelope or a bare array. */
 export async function listLeads(params: { state?: LeadState; limit?: number; offset?: number } = {}): Promise<ApiResult<LeadList>> {
-  const query: NonNullable<operations["list_leads"]["parameters"]["query"]> = {};
+  const query: NonNullable<operations["list_leads_api_v1_leads_get"]["parameters"]["query"]> = {};
   if (params.state) query.state = params.state;
   if (params.limit !== undefined) query.limit = params.limit;
   if (params.offset !== undefined) query.offset = params.offset;
@@ -65,14 +65,14 @@ export async function listLeads(params: { state?: LeadState; limit?: number; off
 
 /** GET /api/v1/leads/{id} */
 export function getLead(id: string): Promise<ApiResult<Lead>> {
-  return run(() => client.GET("/api/v1/leads/{id}", { params: { path: { id } } }));
+  return run(() => client.GET("/api/v1/leads/{lead_id}", { params: { path: { lead_id: id } } }));
 }
 
 /** PATCH /api/v1/leads/{id}/state — the only legal transition is PENDING -> REACHED_OUT. */
 export function markReachedOut(id: string): Promise<ApiResult<Lead>> {
   return run(() =>
-    client.PATCH("/api/v1/leads/{id}/state", {
-      params: { path: { id } },
+    client.PATCH("/api/v1/leads/{lead_id}/state", {
+      params: { path: { lead_id: id } },
       body: { state: "REACHED_OUT" },
     }),
   );

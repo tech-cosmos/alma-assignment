@@ -61,7 +61,7 @@ flowchart LR
 Request path for a submission:
 
 1. Browser posts multipart form data to the API.
-2. Router validates the fields with Pydantic and the file by size, extension and magic bytes.
+2. Router validates the fields with Pydantic and the file by size and magic bytes.
 3. Service uploads the resume through the storage adapter, receiving an opaque key.
 4. Repository inserts the lead in `PENDING`; the transaction commits.
 5. Two `BackgroundTasks` send the confirmation and notification through the email adapter. Failures are logged and never surface to the prospect. The lead is already saved.
@@ -120,19 +120,24 @@ There is exactly one transition. `LeadService.mark_reached_out` checks the curre
 
 ## 5. Adapters and local-first defaults
 
-Both integrations are behind small interfaces:
+Both integrations are behind small Protocols (`backend/app/adapters/*/base.py`):
 
 ```
-EmailSender.send(to: str, subject: str, text: str, html: str | None) -> None
-Storage.put(key, data, content_type) -> None
-Storage.url(key, expires_in) -> str | None      # signed URL, None for local
-Storage.open(key) -> bytes                      # local streaming path
+EmailAdapter.send(message: EmailMessage) -> None          # EmailMessage(to, subject, text, html)
+StorageAdapter.put(key, data, content_type) -> None
+StorageAdapter.delete(key) -> None                        # cleanup if the DB insert fails
+StorageAdapter.stream(key) -> AsyncIterator[bytes]        # KeyError if missing; local download path
+StorageAdapter.presigned_url(key, expires_in) -> str | None   # signed URL for s3, None for local
 ```
+
+Each provider module exposes `create_adapter(settings)`, and the API loads
+`app.adapters.<kind>.<provider>` by the `EMAIL_PROVIDER` / `STORAGE_PROVIDER`
+environment variables at first use. Adding a provider is one new module.
 
 | Adapter | Local default | Production | Tests |
 |---|---|---|---|
-| Email | `smtp` to Mailpit (inbox at :8025) | `ses` via boto3 | `FakeEmailSender` records calls |
-| Storage | `local` to a Docker volume | `s3` via boto3, endpoint override for R2 | `FakeStorage` in memory |
+| Email | `smtp` to Mailpit (inbox at :8025) | `ses` via boto3 | `FakeEmailAdapter` records sent messages |
+| Storage | `local` to a Docker volume | `s3` via boto3, endpoint override for R2 | `FakeStorageAdapter` in memory |
 
 Why local-first: the assignment is reviewed by people who should not have to create AWS or Cloudflare accounts to see it work. With the defaults, `docker compose up` gives a working form, a real Postgres, a real SMTP server with a web inbox, and resumes on disk. The production path is a change of environment variables, not code, and the same tests cover both because they run against the interface.
 
@@ -144,7 +149,7 @@ Three providers were compared on price, maturity and integration effort. Prices 
 
 | Provider | Price per 1,000 emails | Free tier | Status | Notes |
 |---|---|---|---|---|
-| Amazon SES | $0.10 (à la carte) | 3,000/month for 12 months | GA since 2011 | boto3 already a dependency for S3/R2 |
+| Amazon SES | $0.10 (à la carte) | New accounts get AWS Free Tier credits usable on SES | GA since 2011 | boto3 already a dependency for S3/R2 |
 | Cloudflare Email Sending | $0.35 after 3,000 included on the $5/month Workers Paid plan | none without the paid plan | Public beta since April 2026, no GA, no SLA | REST, SMTP and Workers binding |
 | Resend | $0.90 | 100 per day | GA | Nicest developer experience |
 
@@ -194,7 +199,7 @@ The application is a standard ASGI app in a standard container, so it runs on an
 
 ## 11. Security notes
 
-- **Resume validation by magic bytes.** The upload is checked for size (5 MB), declared type, extension and file signature (`%PDF`, the OLE2 header for `.doc`, the ZIP header plus `[Content_Types].xml` for `.docx`). A renamed executable is rejected regardless of its extension or `Content-Type` header.
+- **Resume validation by magic bytes.** The upload is checked for size (5 MB, enforced by reading at most one byte past the limit) and file signature: `%PDF` for PDF, the OLE2 header for `.doc`, and the ZIP header plus a `word/document.xml` entry for `.docx`. The client's extension and `Content-Type` header are ignored; the detected type is what gets stored. A renamed executable, or a plain zip renamed to `.docx`, is rejected.
 - **Signed URLs.** With the `s3` adapter the resume endpoint returns a 302 to a URL that expires within minutes. The bucket is never public and the key is never exposed except through an authenticated request.
 - **No resume attachments in email.** The attorney notification links to the internal lead page rather than attaching the file. Email is not a safe transport for documents that may contain personal data, and attachments would bypass the auth on the resume endpoint.
 - **httpOnly session cookie.** Covered above. `Secure` is set when `PUBLIC_WEB_URL` is https.
@@ -205,9 +210,10 @@ The application is a standard ASGI app in a standard container, so it runs on an
 
 ## 12. Testing strategy
 
-- `pytest` with `httpx.AsyncClient` against the ASGI app, using an isolated Postgres database created per test session and rolled back per test.
+- `pytest` with `httpx.AsyncClient` against the ASGI app, using an isolated Postgres test database that the suite creates and migrates per session and truncates per test.
 - Email and storage are swapped for fakes through dependency overrides, so tests assert on "two emails were sent, one to the prospect and one to the attorney" and "the resume was stored under the returned key" without network or disk.
 - The state machine has explicit tests for the valid transition, the repeated transition (409), the reverse transition (409) and the unauthenticated attempt (401).
+- Adapters have their own unit tests: SMTP against an in-process `aiosmtpd` server, SES and S3 against `moto`, local disk against a temp directory, plus a wiring test that loads every provider through the real `create_adapter` path.
 - CI runs ruff, mypy and pytest for the backend with a Postgres service container, and eslint plus tsc for the frontend, on every push.
 
 ## 13. Next steps

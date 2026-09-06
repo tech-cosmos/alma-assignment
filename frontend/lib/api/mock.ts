@@ -9,7 +9,7 @@
  */
 import type { components } from "./schema";
 
-type Lead = components["schemas"]["LeadOut"];
+type Lead = components["schemas"]["LeadRead"];
 type LeadState = components["schemas"]["LeadState"];
 
 const COOKIE = "access_token";
