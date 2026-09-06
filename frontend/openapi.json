@@ -1,0 +1,289 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Alma Lead Intake API",
+    "version": "1.0.0",
+    "description": "Hand-written from docs/PLAN.md section 5. Replace with the FastAPI-generated spec via `npm run openapi:pull` once the backend is running."
+  },
+  "servers": [{ "url": "http://localhost:8000" }],
+  "paths": {
+    "/api/v1/leads": {
+      "post": {
+        "operationId": "create_lead",
+        "summary": "Create a lead (public)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": { "$ref": "#/components/schemas/LeadCreateForm" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lead created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadOut" } } }
+          },
+          "400": {
+            "description": "Invalid resume (type, size, or magic bytes)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorDetail" } } }
+          },
+          "413": {
+            "description": "Resume larger than 5 MB",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorDetail" } } }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPValidationError" } } }
+          }
+        }
+      },
+      "get": {
+        "operationId": "list_leads",
+        "summary": "List leads",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "state", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/LeadState" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 } },
+          { "name": "offset", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 0, "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of leads",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadList" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": {
+            "description": "Validation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPValidationError" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/leads/{id}": {
+      "get": {
+        "operationId": "get_lead",
+        "summary": "Get a single lead",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/LeadId" }],
+        "responses": {
+          "200": {
+            "description": "Lead",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadOut" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/leads/{id}/state": {
+      "patch": {
+        "operationId": "update_lead_state",
+        "summary": "Transition lead state (PENDING -> REACHED_OUT only)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/LeadId" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadStateUpdate" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated lead",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LeadOut" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": {
+            "description": "Invalid transition (lead already REACHED_OUT)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorDetail" } } }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPValidationError" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/leads/{id}/resume": {
+      "get": {
+        "operationId": "get_lead_resume",
+        "summary": "Download resume: 302 to a signed URL (s3) or streams the file (local)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/LeadId" }],
+        "responses": {
+          "200": {
+            "description": "Resume file (local storage)",
+            "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "302": { "description": "Redirect to a signed URL (s3 storage)" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Log in; sets an httpOnly auth cookie and returns the user",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged in",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserOut" } } }
+          },
+          "401": {
+            "description": "Bad credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorDetail" } } }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPValidationError" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Log out; clears the auth cookie",
+        "security": [{ "cookieAuth": [] }],
+        "responses": {
+          "204": { "description": "Logged out" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Health check including DB",
+        "responses": {
+          "200": {
+            "description": "Healthy",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } }
+          },
+          "503": {
+            "description": "Unhealthy",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": { "type": "apiKey", "in": "cookie", "name": "access_token" }
+    },
+    "parameters": {
+      "LeadId": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid auth cookie",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorDetail" } } }
+      },
+      "NotFound": {
+        "description": "Lead not found",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorDetail" } } }
+      }
+    },
+    "schemas": {
+      "LeadState": { "type": "string", "enum": ["PENDING", "REACHED_OUT"] },
+      "LeadCreateForm": {
+        "type": "object",
+        "required": ["first_name", "last_name", "email", "resume"],
+        "properties": {
+          "first_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "last_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "resume": {
+            "type": "string",
+            "format": "binary",
+            "description": "PDF, DOC, or DOCX; max 5 MB; validated by magic bytes"
+          }
+        }
+      },
+      "LeadOut": {
+        "type": "object",
+        "required": [
+          "id", "first_name", "last_name", "email", "resume_name", "resume_type",
+          "state", "created_at", "updated_at", "reached_out_at", "reached_out_by"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "first_name": { "type": "string" },
+          "last_name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "resume_name": { "type": "string", "description": "Original filename" },
+          "resume_type": { "type": "string", "description": "MIME type" },
+          "state": { "$ref": "#/components/schemas/LeadState" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "reached_out_at": { "type": ["string", "null"], "format": "date-time" },
+          "reached_out_by": { "type": ["string", "null"], "format": "uuid" }
+        }
+      },
+      "LeadList": {
+        "type": "object",
+        "required": ["items", "total", "limit", "offset"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/LeadOut" } },
+          "total": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "offset": { "type": "integer" }
+        }
+      },
+      "LeadStateUpdate": {
+        "type": "object",
+        "required": ["state"],
+        "properties": { "state": { "$ref": "#/components/schemas/LeadState" } }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 1 }
+        }
+      },
+      "UserOut": {
+        "type": "object",
+        "required": ["id", "email", "created_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": ["status", "db"],
+        "properties": {
+          "status": { "type": "string", "enum": ["ok", "degraded"] },
+          "db": { "type": "string", "enum": ["ok", "error"] }
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "required": ["detail"],
+        "properties": { "detail": { "type": "string" } }
+      },
+      "ValidationError": {
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "properties": {
+          "loc": { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] } },
+          "msg": { "type": "string" },
+          "type": { "type": "string" }
+        }
+      },
+      "HTTPValidationError": {
+        "type": "object",
+        "properties": { "detail": { "type": "array", "items": { "$ref": "#/components/schemas/ValidationError" } } }
+      }
+    }
+  }
+}
