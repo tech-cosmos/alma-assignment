@@ -1,0 +1,538 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Alma Lead Intake: runtime architecture",
+    "output": "runtime.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "views": [
+      {
+        "id": "submit-path",
+        "label": "Prospect submission",
+        "focus": [
+          "prospect",
+          "form",
+          "routers",
+          "services",
+          "storage_port",
+          "blob",
+          "repos",
+          "db",
+          "email_port",
+          "mail"
+        ],
+        "note": "POST /api/v1/leads: magic-byte check, resume stored, lead + PENDING event committed, two emails after commit."
+      },
+      {
+        "id": "attorney-path",
+        "label": "Attorney reach-out",
+        "focus": [
+          "mail",
+          "attorney",
+          "internal",
+          "guard",
+          "routers",
+          "services",
+          "repos",
+          "db"
+        ],
+        "note": "Email link opens /leads/{id}; PATCH state writes the REACHED_OUT event behind the JWT cookie."
+      },
+      {
+        "id": "ports",
+        "label": "Adapter ports",
+        "focus": [
+          "services",
+          "email_port",
+          "mail",
+          "storage_port",
+          "blob"
+        ],
+        "note": "EmailAdapter and StorageAdapter are Protocols; the provider module is chosen by env at first use."
+      }
+    ],
+    "repository": {
+      "url": "https://github.com/tech-cosmos/alma-assignment",
+      "revision": "9ee2e52631eead8a3a92406b6ef94642e4cc0f4b"
+    }
+  },
+  "components": [
+    {
+      "id": "prospect",
+      "type": "external",
+      "label": "Prospect",
+      "sublabel": "browser, no auth",
+      "pos": [
+        56,
+        120
+      ],
+      "size": [
+        144,
+        60
+      ]
+    },
+    {
+      "id": "attorney",
+      "type": "external",
+      "label": "Attorney",
+      "sublabel": "browser + JWT",
+      "pos": [
+        56,
+        480
+      ],
+      "size": [
+        144,
+        60
+      ]
+    },
+    {
+      "id": "form",
+      "type": "frontend",
+      "label": "Public form",
+      "sublabel": "Next.js 15, route /",
+      "pos": [
+        250,
+        120
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "frontend/app/page.tsx"
+        },
+        {
+          "path": "frontend/components/lead-form.tsx"
+        }
+      ]
+    },
+    {
+      "id": "internal",
+      "type": "frontend",
+      "label": "Internal UI",
+      "sublabel": "/leads and /leads/[id]",
+      "pos": [
+        250,
+        480
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "frontend/app/(internal)/leads/page.tsx"
+        },
+        {
+          "path": "frontend/app/(internal)/leads/[id]/page.tsx"
+        },
+        {
+          "path": "frontend/components/lead-detail.tsx"
+        }
+      ],
+      "tag": "viewer, notes, timeline"
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "JWT cookie guard",
+      "sublabel": "middleware.ts + deps.py",
+      "pos": [
+        250,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "frontend/middleware.ts"
+        },
+        {
+          "path": "backend/app/api/deps.py",
+          "line": 74
+        }
+      ],
+      "tag": "httpOnly access_token"
+    },
+    {
+      "id": "routers",
+      "type": "backend",
+      "label": "Routers /api/v1",
+      "sublabel": "leads, auth, health",
+      "pos": [
+        460,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/api/v1/leads.py"
+        },
+        {
+          "path": "backend/app/api/v1/auth.py"
+        },
+        {
+          "path": "backend/app/main.py"
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "type": "backend",
+      "label": "Services",
+      "sublabel": "LeadService + notifier",
+      "pos": [
+        680,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/services/lead.py"
+        },
+        {
+          "path": "backend/app/services/notify.py"
+        },
+        {
+          "path": "backend/app/services/resume.py"
+        }
+      ],
+      "tag": "validate_resume"
+    },
+    {
+      "id": "repos",
+      "type": "backend",
+      "label": "Repositories",
+      "sublabel": "Lead + User repositories",
+      "pos": [
+        920,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/repositories/lead.py"
+        },
+        {
+          "path": "backend/app/repositories/user.py"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Postgres 16",
+      "sublabel": "leads, lead_events",
+      "pos": [
+        1150,
+        300
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/models/lead.py"
+        },
+        {
+          "path": "backend/app/models/lead_event.py"
+        },
+        {
+          "path": "backend/app/models/lead_note.py"
+        }
+      ],
+      "tag": "lead_notes, users"
+    },
+    {
+      "id": "storage_port",
+      "type": "backend",
+      "label": "StorageAdapter port",
+      "sublabel": "put / stream / presign",
+      "pos": [
+        920,
+        120
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/adapters/storage/base.py"
+        },
+        {
+          "path": "backend/app/adapters/storage/local.py"
+        },
+        {
+          "path": "backend/app/adapters/storage/s3.py"
+        }
+      ],
+      "tag": "local | s3"
+    },
+    {
+      "id": "email_port",
+      "type": "backend",
+      "label": "EmailAdapter port",
+      "sublabel": "send(EmailMessage)",
+      "pos": [
+        920,
+        480
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/adapters/email/base.py"
+        },
+        {
+          "path": "backend/app/adapters/email/smtp.py"
+        },
+        {
+          "path": "backend/app/adapters/email/ses.py"
+        }
+      ],
+      "tag": "console | smtp | ses"
+    },
+    {
+      "id": "blob",
+      "type": "cloud",
+      "label": "Resume storage",
+      "sublabel": "local volume | R2 / S3",
+      "pos": [
+        1150,
+        120
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "mail",
+      "type": "external",
+      "label": "Mail delivery",
+      "sublabel": "Mailpit | Amazon SES",
+      "pos": [
+        1150,
+        480
+      ],
+      "size": [
+        160,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Public: no auth",
+      "wraps": [
+        "prospect",
+        "form"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Authenticated: JWT httpOnly cookie",
+      "wraps": [
+        "attorney",
+        "internal",
+        "guard"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "api: FastAPI (routers -> services -> repositories)",
+      "wraps": [
+        "routers",
+        "services",
+        "repos",
+        "storage_port",
+        "email_port"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Storage port boundary",
+      "wraps": [
+        "storage_port",
+        "blob"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Email port boundary",
+      "wraps": [
+        "email_port",
+        "mail"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "prospect-form",
+      "from": "prospect",
+      "to": "form",
+      "label": "fills form",
+      "variant": "emphasis",
+      "labelDy": -28
+    },
+    {
+      "id": "form-post",
+      "from": "form",
+      "to": "routers",
+      "label": "POST /api/v1/leads",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelSegment": 0
+    },
+    {
+      "id": "routers-services",
+      "from": "routers",
+      "to": "services",
+      "label": "validate_resume: magic bytes",
+      "variant": "emphasis",
+      "labelDy": -26
+    },
+    {
+      "id": "services-storage",
+      "from": "services",
+      "to": "storage_port",
+      "label": "put(resume_key)",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "left",
+      "labelSegment": 1
+    },
+    {
+      "id": "storage-blob",
+      "from": "storage_port",
+      "to": "blob",
+      "label": "STORAGE_PROVIDER",
+      "labelDy": -26
+    },
+    {
+      "id": "services-repos",
+      "from": "services",
+      "to": "repos",
+      "label": "lead + PENDING event, commit",
+      "variant": "emphasis",
+      "labelDy": -26
+    },
+    {
+      "id": "repos-db",
+      "from": "repos",
+      "to": "db",
+      "label": "SQLAlchemy async",
+      "labelDy": -26
+    },
+    {
+      "id": "services-email",
+      "from": "services",
+      "to": "email_port",
+      "label": "2 emails after commit",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "labelSegment": 1
+    },
+    {
+      "id": "email-mail",
+      "from": "email_port",
+      "to": "mail",
+      "label": "EMAIL_PROVIDER",
+      "labelDy": -26
+    },
+    {
+      "id": "mail-attorney",
+      "from": "mail",
+      "to": "attorney",
+      "label": "link to /leads/{id}",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          1230,
+          610
+        ],
+        [
+          128,
+          610
+        ]
+      ],
+      "labelSegment": 1
+    },
+    {
+      "id": "attorney-internal",
+      "from": "attorney",
+      "to": "internal",
+      "label": "opens /leads/{id}",
+      "variant": "emphasis",
+      "labelDy": -28
+    },
+    {
+      "id": "internal-guard",
+      "from": "internal",
+      "to": "guard",
+      "label": "credentials: include",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "guard-routers",
+      "from": "guard",
+      "to": "routers",
+      "label": "PATCH /leads/{id}/state",
+      "variant": "security",
+      "labelDy": -26
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Submission path",
+      "items": [
+        "Router reads at most 5 MB + 1 byte and sniffs PDF / DOC / DOCX magic bytes",
+        "LeadService stores the resume, then inserts lead + PENDING event in one transaction",
+        "LeadNotifier sends prospect confirmation and attorney notification after the response; failures are logged, never raised"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundaries",
+      "items": [
+        "Public: the form and POST /api/v1/leads only",
+        "Authenticated: /leads pages and every other /api/v1/leads route need the access_token cookie or a Bearer JWT",
+        "Attorney email links to /leads/{id}; the resume is never attached"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Adapter ports",
+      "items": [
+        "EmailAdapter: console | smtp (Mailpit) | ses",
+        "StorageAdapter: local (streamed by the API) | s3 (302 to a signed URL, R2 via S3_ENDPOINT_URL)",
+        "Provider module loaded by env at first use; tests use fakes"
+      ]
+    }
+  ]
+}

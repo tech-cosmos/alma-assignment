@@ -24,6 +24,10 @@ Non-functional goals we set for ourselves:
 
 ## 2. Architecture
 
+![Runtime architecture: prospect form and attorney UI in the browser, FastAPI layered as routers, services and repositories, Postgres, and the email and storage adapter ports](architecture/runtime.share-card.png)
+
+*Runtime architecture as built, generated with Archify from `docs/architecture/runtime.architecture.json`; open [the interactive version](architecture/runtime.html) to trace the submission path node by node. The Mermaid diagram below is the text-searchable fallback.*
+
 ```mermaid
 flowchart LR
     subgraph Browser
