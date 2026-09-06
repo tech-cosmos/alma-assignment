@@ -22,6 +22,8 @@ from app.schemas.lead import (
     LeadDetail,
     LeadEventRead,
     LeadList,
+    LeadNoteCreate,
+    LeadNoteRead,
     LeadRead,
     LeadStateUpdate,
 )
@@ -99,13 +101,30 @@ async def list_leads(
 
 @router.get("/{lead_id}", response_model=LeadDetail)
 async def get_lead(_: CurrentUser, session: SessionDep, lead_id: uuid.UUID) -> LeadDetail:
-    """One lead plus its full history (oldest event first)."""
+    """One lead plus its full history and attorney notes (each oldest first)."""
     lead = await _get_lead_or_404(session, lead_id)
-    events = await LeadRepository(session).list_events(lead.id)
+    repo = LeadRepository(session)
+    events = await repo.list_events(lead.id)
+    notes = await repo.list_notes(lead.id)
     return LeadDetail(
         **LeadRead.model_validate(lead).model_dump(),
         events=[LeadEventRead.model_validate(e) for e in events],
+        notes=[LeadNoteRead.model_validate(n) for n in notes],
     )
+
+
+@router.post("/{lead_id}/notes", response_model=LeadNoteRead, status_code=status.HTTP_201_CREATED)
+async def create_note(
+    user: CurrentUser,
+    session: SessionDep,
+    storage: StorageDep,
+    lead_id: uuid.UUID,
+    body: LeadNoteCreate,
+) -> LeadNoteRead:
+    """Append a note to a lead. Notes are plain text and cannot be edited or deleted."""
+    lead = await _get_lead_or_404(session, lead_id)
+    note = await LeadService(LeadRepository(session), storage).add_note(lead, user, body.body)
+    return LeadNoteRead.model_validate(note)
 
 
 @router.patch("/{lead_id}/state", response_model=LeadRead)

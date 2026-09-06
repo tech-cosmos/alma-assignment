@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from app.adapters.storage.base import StorageAdapter
 from app.models.lead import Lead, LeadState
 from app.models.lead_event import LeadEvent
+from app.models.lead_note import LeadNote
 from app.models.user import User
 from app.repositories.lead import LeadRepository
 from app.schemas.lead import LeadCreate
@@ -81,6 +82,14 @@ class LeadService:
         )
         await self._repo.commit()
         return await self._repo.refresh(lead)
+
+    async def add_note(self, lead: Lead, user: User, body: str) -> LeadNote:
+        """Append a plain-text note by ``user``; the author's email is snapshotted on the row."""
+        note = LeadNote(lead_id=lead.id, author_id=user.id, author_email=user.email, body=body)
+        await self._repo.add_note(note)
+        await self._repo.commit()
+        await self._repo.refresh_note(note)
+        return note
 
     async def transition(self, lead: Lead, target: LeadState, user: User) -> Lead:
         """Apply a requested state; only PENDING -> REACHED_OUT is defined."""

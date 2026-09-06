@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.lead import LeadState
 
@@ -42,8 +42,34 @@ class LeadEventRead(BaseModel):
     created_at: datetime
 
 
+NOTE_MAX_CHARS = 2000
+
+
+class LeadNoteCreate(BaseModel):
+    """Body of ``POST /leads/{id}/notes``. Whitespace is trimmed before the length check."""
+
+    body: str = Field(min_length=1, max_length=NOTE_MAX_CHARS)
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def _strip(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class LeadNoteRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    author_id: uuid.UUID | None
+    author_email: str
+    body: str
+    created_at: datetime
+
+
 class LeadDetail(LeadRead):
     events: list[LeadEventRead]
+    # Attorney notes, oldest first. Append-only: there is no update or delete.
+    notes: list[LeadNoteRead]
 
 
 class LeadCounts(BaseModel):
