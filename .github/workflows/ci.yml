@@ -41,7 +41,7 @@ jobs:
       EMAIL_PROVIDER: console
       EMAIL_FROM: no-reply@example.com
       STORAGE_PROVIDER: local
-      STORAGE_LOCAL_DIR: ${{ runner.temp }}/resumes
+      STORAGE_LOCAL_DIR: ${{ github.workspace }}/.ci-resumes
       PUBLIC_WEB_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

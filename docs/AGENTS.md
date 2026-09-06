@@ -61,6 +61,13 @@ Each entry: what the agent produced, why it was wrong, how it was caught, and th
 - **How it was caught:** Integration dumped the real spec from `app.openapi()`, diffed the schema and path lists, then ran the regeneration and `tsc`.
 - **Fix:** Replaced `frontend/openapi.json` with the backend's real output, regenerated `schema.d.ts`, and updated the six references in `lib/api/index.ts` and `lib/api/mock.ts`. `tsc`, `eslint` and `next build` pass on the regenerated types.
 
+### 7. CI workflow used a context GitHub does not allow at job level (build phase)
+
+- **What the agent produced:** Track D's `ci.yml` set `STORAGE_LOCAL_DIR: ${{ runner.temp }}/resumes` in the backend job's `env:` block. The `runner` context is only available inside steps, so GitHub rejected the whole workflow before starting any job. Track D's own gate was "the workflow file parses as YAML", which it did; the error is in GitHub's expression rules, not YAML.
+- **How it was caught:** First push to `main` showed a 0-second failed run with "This run likely failed because of a workflow file issue" and no jobs.
+- **Fix:** Use `${{ github.workspace }}/.ci-resumes`, which is valid at job level. Re-pushed and watched the run.
+- **Lesson:** A workflow is only verified by a run. Local YAML validation and `actionlint` catch different classes of error; neither substitutes for the first green run.
+
 **Lesson applied going forward:** the agent must verify platform capabilities against current docs before ruling an option out, especially for fast-moving platforms. This is now the working rule for the rest of the build.
 
 ## Delegation ledger
