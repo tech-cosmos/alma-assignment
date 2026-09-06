@@ -12,4 +12,5 @@ Run `git log --oneline` to see the split; `scripts/agent_stats.sh` (added later)
 | frontend/ (all) | agent | Track C commit `5571092` |
 | docker-compose.yml, backend/Dockerfile, Makefile, .github/, .env.example, README.md, docs/DESIGN.md | agent | Track D commit `3810342`; DESIGN.md corrected during merge review |
 | backend/.dockerignore | agent | Added during Track D review |
+| frontend/app/(internal)/leads/[id]/page.tsx, frontend/components/lead-detail.tsx, frontend/components/state-badge.tsx | agent | Lead detail page added after Shivam found the email link 404 (caught issue 8) |
 | frontend/public/.gitkeep, frontend/openapi.json, frontend/lib/api/schema.d.ts, frontend/lib/api/index.ts, frontend/lib/api/mock.ts | agent | Fixed during integration (caught issues 5 and 6); spec regenerated from the running backend |

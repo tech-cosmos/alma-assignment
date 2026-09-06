@@ -68,6 +68,14 @@ Each entry: what the agent produced, why it was wrong, how it was caught, and th
 - **Fix:** Use `${{ github.workspace }}/.ci-resumes`, which is valid at job level. Re-pushed and watched the run.
 - **Lesson:** A workflow is only verified by a run. Local YAML validation and `actionlint` catch different classes of error; neither substitutes for the first green run.
 
+### 8. The attorney email linked to a page nobody built (found by Shivam in the running app)
+
+- **What the agents produced:** The plan says the attorney notification links to the lead's internal page. Track B built the link as `PUBLIC_WEB_URL/leads/{id}`, exactly as specified. Track C built the internal UI as a single list at `/leads` and never created a `/leads/[id]` route. Both agents satisfied their own reading of the plan; the plan itself never listed a detail page in the frontend routes.
+- **Why the integrator missed it:** The end-to-end check verified that the attorney email *contained* the lead link, and separately that `/leads` worked after login. It never clicked the link. Checking that a link exists is not the same as following it.
+- **How it was caught:** Shivam submitted a lead, opened the notification in Mailpit, clicked through, and got the Next.js 404 page.
+- **Fix:** Added `app/(internal)/leads/[id]/page.tsx` with a `LeadDetail` client component: loads the lead through the existing get endpoint, shows every field, links the resume, and offers the same "Mark reached out" action as the list. A 404 or malformed id shows a "Lead not found" message with a way back; a 401 clears the cookie and redirects to login with the detail page as `next`. Names in the list now link to the detail page, and the state badge moved to a shared component. Verified by clicking the actual Mailpit link in a fresh browser session, logging in, landing on the detail page, and marking the lead reached out.
+- **Lesson:** Verification has to follow every user-facing path the system emits, not just confirm the path exists. Links in emails are user-facing paths.
+
 **Lesson applied going forward:** the agent must verify platform capabilities against current docs before ruling an option out, especially for fast-moving platforms. This is now the working rule for the rest of the build.
 
 ## Delegation ledger
@@ -109,6 +117,7 @@ What the human checked before merging each track, and what was changed as a resu
 | D | integrating agent | `docker compose config`, Dockerfile expectations vs Track A (`app.main:app`, `alembic.ini`, `python -m app.seed`, `/api/v1/health`), CI YAML, README commands, DESIGN.md vs code | DESIGN.md drift (caught issue 4) fixed; `backend/.dockerignore` added so `COPY . .` cannot pull a host `.venv` into the image |
 | C | integrating agent | `npm ci`, `eslint`, `tsc --noEmit`, `next build`; read middleware, API client and error mapping against the section 5 contract | Merged; end-to-end run against the real API recorded below |
 | Compose end-to-end (API) | integrating agent | `docker compose up --build`; curl: health, create lead with PDF (201), fake PDF (422), list without cookie (401), login, list (envelope), PATCH to REACHED_OUT (200 with `reached_out_at`/`reached_out_by`), repeat (409), reverse (409), resume download bytes identical with correct headers, resume without cookie (401), state filter, logout then list (401). Mailpit: two messages per lead, attorney mail links to `/leads/{id}` with no attachment | Web image failed to build (caught issue 5); fixed, then every step passed |
+| Email link to detail page | Shivam, then integrating agent | Clicked the attorney notification link in Mailpit: 404 (caught issue 8). After the fix: fresh browser session follows the email link, is redirected to login with `next` set, lands on the detail page after login, marks the lead reached out; bogus id shows "Lead not found" | Fixed and re-verified |
 | Compose end-to-end (browser) | integrating agent | Headless Chromium via agent-browser: submitted the public form with a PDF, saw the "Received" state; `/leads` redirected to `/login?next=/leads`; logged in; both leads listed with resume links to the API; clicked "Mark reached out", button became disabled "Reached out"; no console or page errors | Passed. Frontend spec drift (caught issue 6) fixed afterwards and re-verified with `tsc`, `eslint`, `next build` |
 
 ## Transcript excerpts

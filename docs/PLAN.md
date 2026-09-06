@@ -79,7 +79,7 @@ Kubernetes, Terraform, message queue, rate limiting, multi-tenant auth, admin us
     ├── app/
     │   ├── page.tsx          # public lead form
     │   ├── login/
-    │   └── (internal)/leads/ # auth-guarded list
+    │   └── (internal)/leads/ # auth-guarded list, plus [id]/ detail page (target of the attorney email link)
     ├── components/
     ├── lib/api/              # generated client
     └── middleware.ts         # cookie check for /leads

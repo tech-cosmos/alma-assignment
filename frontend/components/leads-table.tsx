@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 
 import { type ApiFailure, type Lead, type LeadState, listLeads, logout, markReachedOut, resumeUrl } from "@/lib/api";
 import { formatDateTime, stateLabel } from "@/lib/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StateBadge } from "@/components/state-badge";
 import { StateFilter } from "@/components/state-filter";
 import { cn } from "@/lib/utils";
 
@@ -150,8 +151,16 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
                 const busy = busyId === lead.id;
                 return (
                   <TableRow key={lead.id} className="align-top">
-                    <TableCell className="font-medium">{lead.first_name}</TableCell>
-                    <TableCell className="font-medium">{lead.last_name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/leads/${lead.id}`} className="underline-offset-4 hover:underline">
+                        {lead.first_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/leads/${lead.id}`} className="underline-offset-4 hover:underline">
+                        {lead.last_name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <a href={`mailto:${lead.email}`} className="underline-offset-4 hover:underline">
                         {lead.email}
@@ -211,14 +220,4 @@ export function LeadsTable({ state }: { state: LeadState | undefined }) {
 
 function Th({ className, children }: { className?: string; children: React.ReactNode }) {
   return <TableHead className={cn("eyebrow h-10 text-muted-foreground", className)}>{children}</TableHead>;
-}
-
-function StateBadge({ state }: { state: LeadState }) {
-  return state === "REACHED_OUT" ? (
-    <Badge className="bg-success text-success-foreground">Reached out</Badge>
-  ) : (
-    <Badge variant="outline" className="border-brass/60 bg-brass/10 text-brass-foreground">
-      Pending
-    </Badge>
-  );
 }
