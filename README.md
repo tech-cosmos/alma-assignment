@@ -6,6 +6,10 @@ Lead intake for an immigration law firm: a public form where prospects submit th
 - Web: Next.js 15 App Router, TypeScript, Tailwind, shadcn/ui
 - Email and storage are pluggable adapters. Local defaults need no cloud account.
 
+![Runtime architecture: browser, Next.js web app, FastAPI API with email and storage adapter ports, Postgres, Mailpit or SES, local volume or R2/S3](docs/architecture/runtime.share-card.png)
+
+*How a submission flows through the system; the [interactive diagram](docs/architecture/runtime.html) lets you trace each path and jump to the source files behind every node.*
+
 Design rationale lives in [docs/DESIGN.md](docs/DESIGN.md). Coding-agent usage is in [docs/AGENTS.md](docs/AGENTS.md) and attribution in [NOTES.md](NOTES.md).
 
 ## Run locally
