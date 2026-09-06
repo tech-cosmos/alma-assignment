@@ -1,16 +1,24 @@
 # Coding-Agent Usage
 
-This document is a required deliverable. It is maintained continuously during the build, not written at the end.
-See `docs/PLAN.md` section 8 for the attribution rules every agent follows.
+This document is a required deliverable. The first section is the half-page writeup the assignment asks for. Everything after it is the supporting record: every agent mistake we caught, the delegation ledger, and what was verified before each merge. It was maintained during the build, not written at the end. Attribution rules are in `docs/PLAN.md` section 8.
+
+## Summary (the half-page writeup)
+
+**Tools.** Claude Code running Claude Fable 5.1, inside Conductor so that several agents could work in parallel in separate git worktrees. One agent acted as integrator; four built the tracks in `docs/PLAN.md` section 7 (backend core, adapters, frontend, ops and docs); a sixth did a UI pass after the first end-to-end run. Agents did their own web research against current Cloudflare and AWS docs to ground the stack decision.
+
+**What was delegated.** Nearly all of the code: the FastAPI service, migrations, adapters, tests, the Next.js app, Docker, CI, and the first drafts of every document. Agents are fastest on pattern-heavy work that a test suite or a build can verify, so that is what they got. The integrating agent also did the merges and the end-to-end verification, because reading five agents' reports is not the same as running their code.
+
+**What I did myself.** The decisions and the judgement calls: which stack, which email provider and why (SES over Cloudflare's beta service and over Resend on price), what to leave out of scope, which of the fourteen proposed UI improvements were worth the time and which broke the assignment's state machine. I set the interface contracts in the plan, reviewed every merge before it landed, and tested the running app as a user. Two of the eight logged catches were mine; the other six the integrating agent found before I saw them. Every commit is prefixed `[agent]`, `[hand]` or `[agent+edit]`, and `NOTES.md` maps paths to origin.
+
+**Where the agent got it wrong.** The clearest case is caught issue 3. I gave one agent exact adapter signatures and told another to "define the protocols yourself". Both did exactly as told, and the two halves of the adapter layer could not import each other: different method names, different factory conventions, a fakes module in one branch and a fakes package in the other. The merge produced add/add conflicts in both protocol files. The fix was to keep the protocol the routers and thirty tests already used, rewrite the five adapter implementations and their forty-four tests to it, and make the storage stream method async so a missing file raises before any response bytes are sent. The root cause was my prompts, not the agents, and the lesson is recorded: shared interfaces go in the plan verbatim before anyone starts. The most instructive case is issue 8: the attorney email linked to a lead page that no track had built. Both agents satisfied their own reading of the plan, the integrator confirmed the link existed but never clicked it, and I found the 404 as a user.
+
+**Verification.** Nothing was merged on the strength of an agent's report. Each track was re-run locally: tests, lint, types, migrations, a real `docker compose up --build`, and a browser click-through including the paths the emails emit. Three of the eight catches only surfaced there.
 
 ## Tools used
 
 - Claude Code (Claude Fable 5.1) run inside Conductor, with several workspaces working in parallel on the tracks defined in `docs/PLAN.md` section 7.
 - Web lookups by the agent (Cloudflare and AWS docs, pricing pages) to ground design decisions in current facts.
-
-## What was delegated vs. written by hand
-
-_Filled in as tracks complete. See the delegation ledger at the end._
+- Headless Chromium via `agent-browser` for the browser verification passes, and `curl` against the compose stack for the API passes.
 
 ## Caught issues
 
@@ -29,6 +37,7 @@ Each entry: what the agent produced, why it was wrong, how it was caught, and th
 - **Why it was wrong:** Cloudflare Email Service includes Email Sending (REST API, SMTP, and Workers binding) to arbitrary recipients on the Workers Paid plan. The agent was describing the pre-2025 Email Routing product.
 - **How it was caught:** Shivam pasted the Email Service "send emails" docs link and asked the agent to research and confirm.
 - **Fix:** The agent fetched the docs, pricing, limits, and launch timeline. Finding: Email Sending was announced Sept 2025, private beta Nov 2025, public beta Apr 16 2026, and still beta with no GA or SLA. Shivam decided on Amazon SES for maturity; the agent's price research (SES $0.10/1k vs Cloudflare $0.35/1k vs Resend $0.90/1k) supported that choice. Recorded in `docs/PLAN.md` section 2.
+- **Lesson (from issues 1 and 2):** verify platform capabilities against current docs before ruling an option out, especially for fast-moving platforms. This became the working rule for the rest of the build.
 
 ### 3. Tracks A and B built the adapter layer to two different contracts (build phase)
 
@@ -76,7 +85,6 @@ Each entry: what the agent produced, why it was wrong, how it was caught, and th
 - **Fix:** Added `app/(internal)/leads/[id]/page.tsx` with a `LeadDetail` client component: loads the lead through the existing get endpoint, shows every field, links the resume, and offers the same "Mark reached out" action as the list. A 404 or malformed id shows a "Lead not found" message with a way back; a 401 clears the cookie and redirects to login with the detail page as `next`. Names in the list now link to the detail page, and the state badge moved to a shared component. Verified by clicking the actual Mailpit link in a fresh browser session, logging in, landing on the detail page, and marking the lead reached out.
 - **Lesson:** Verification has to follow every user-facing path the system emits, not just confirm the path exists. Links in emails are user-facing paths.
 
-**Lesson applied going forward:** the agent must verify platform capabilities against current docs before ruling an option out, especially for fast-moving platforms. This is now the working rule for the rest of the build.
 
 ## Delegation ledger
 
@@ -102,7 +110,7 @@ Filled in per track as each track branch is reviewed and merged (`docs/PLAN.md` 
 | C | Next.js form, login, leads list, middleware, generated client, mock API, Dockerfile | agent | UI scaffolding is where agents are fastest; verified with tsc, eslint, build and a browser run against the real API | `5571092` |
 | D | Compose, Dockerfile, Makefile, CI, .env.example, README, DESIGN.md | agent | Boilerplate with a clear spec; the design doc was then corrected by hand-directed review (caught issue 4) | `3810342` |
 | Integration | Reconcile A and B adapter contracts, rewrite B tests, wire templates into the notifier | agent, directed by Shivam | Mechanical once the decision (keep A's protocol) was made; decision reasoning is in caught issue 3 | `a9a41e4` |
-| UI pass | Lead history table and timeline, actor email, clickable rows, inline PDF viewer with download flag, signed-in user, pagination, filter tabs with counts, relative times, detail page restructure | agent, scoped by Shivam with the integrator's review | Shivam picked 8 of 14 proposed items; undo of the state transition and search were declined to stay within the assignment's state machine and the time box | see commit after `fe62999` |
+| UI pass | Lead history table and timeline, actor email, clickable rows, inline PDF viewer with download flag, signed-in user, pagination, filter tabs with counts, relative times, detail page restructure | agent, scoped by Shivam with the integrator's review | Shivam picked 8 of 14 proposed items; undo of the state transition and search were declined to stay within the assignment's state machine and the time box | `75e410a` |
 | Integration | Design doc corrections, `.dockerignore`, end-to-end verification | agent, directed by Shivam | Verification against running containers, not reports | see verification table |
 
 Tracks: A backend core, B adapters, C frontend, D ops and docs.
