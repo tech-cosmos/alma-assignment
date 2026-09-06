@@ -120,7 +120,14 @@ users
 | GET | /api/v1/leads/{id}/resume | JWT | 302 to signed URL (s3) or streams file (local) |
 | POST | /api/v1/auth/login | none | sets httpOnly cookie, returns user |
 | POST | /api/v1/auth/logout | JWT | clears cookie |
+| GET | /api/v1/auth/me | JWT | current user `{id, email}` (added by Track A for the web app) |
 | GET | /api/v1/health | none | db check |
+
+Response shapes (fixed by Track A):
+- Lead: `{id, first_name, last_name, email, resume_name, resume_type, state, created_at, updated_at, reached_out_at, reached_out_by}`. `resume_key` is never exposed.
+- List: `{items: Lead[], total, limit, offset}`; `limit` 1..200 (default 50), `offset` >= 0.
+- Auth cookie is named `access_token`; `Authorization: Bearer <jwt>` is accepted too.
+- Adapter selection: `app/adapters/<email|storage>/<provider>.py` must expose `create_adapter(settings)`; `api/deps.py` imports it by `EMAIL_PROVIDER` / `STORAGE_PROVIDER`.
 
 Rules:
 - Resume: pdf/doc/docx only, max 5 MB, validated by magic bytes not just extension.
